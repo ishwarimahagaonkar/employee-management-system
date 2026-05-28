@@ -1,0 +1,34 @@
+const express = require("express");
+
+const {
+    createEmployee,
+    getAllEmployees,
+    getEmployeeById,
+    updateEmployee,
+    deleteEmployee,
+} = require("../controllers/employeeController");
+
+const { protect, adminOnly } = require("../middleware/authMiddleware");
+
+const router = express.Router();
+
+/**
+ * EMPLOYEE MANAGEMENT ROUTES (ADMIN ONLY)
+ */
+
+// Create employee
+router.post("/", protect, adminOnly, createEmployee);
+
+// Get all employees
+router.get("/", protect, adminOnly, getAllEmployees);
+
+// Get single employee
+router.get("/:id", protect, adminOnly, getEmployeeById);
+
+// Update employee
+router.put("/:id", protect, adminOnly, updateEmployee);
+
+// Delete employee
+router.delete("/:id", protect, adminOnly, deleteEmployee);
+
+module.exports = router;

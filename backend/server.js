@@ -8,6 +8,10 @@ const authRoutes = require("./src/routes/authRoutes");
 
 const testRoutes = require("./src/routes/testRoutes");
 
+const employeeRoutes = require("./src/routes/employeeRoutes");
+
+const attendanceRoutes = require("./src/routes/attendanceRoutes");
+
 dotenv.config();
 
 connectDB();
@@ -21,9 +25,13 @@ app.use("/api/auth", authRoutes);
 
 app.use("/api/test", testRoutes);
 
+app.use("/api/employees", employeeRoutes);
+
 app.get("/", (req, res) => {
     res.send("API Running...");
 });
+
+app.use("/api/attendance", attendanceRoutes);
 
 const PORT = process.env.PORT || 5000;
 
