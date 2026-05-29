@@ -56,7 +56,18 @@ const attendanceSchema = new mongoose.Schema({
         type: String,
         enum: ["present", "pending", "approved", "rejected"],
         default: "present"
+    },
+
+    workingHours: {
+        type: Number,
+        default: 0
+    },
+
+    overtimeHours: {
+        type: Number,
+        default: 0
     }
+
 });
 
 module.exports = mongoose.model("Attendance", attendanceSchema);

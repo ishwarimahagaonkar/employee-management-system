@@ -1,5 +1,6 @@
 const Attendance = require("../models/Attendance");
 const { isWithinOffice } = require("../utils/locationCheck");
+const { calculateWorkingHours } = require("../utils/timeCalculator");
 
 exports.punchIn = async (req, res) => {
     try {
@@ -71,12 +72,16 @@ exports.punchOut = async (req, res) => {
         attendance.punchOutTime = new Date();
         attendance.punchOutLocation = { lat, lng };
 
-        await attendance.save();
+        // calculate working hours
+        const hours = calculateWorkingHours(
+            attendance.punchInTime,
+            attendance.punchOutTime
+        );
 
-        res.json({
-            message: "Punch Out successful",
-            attendance
-        });
+        attendance.workingHours = hours;
+
+
+
 
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -151,4 +156,58 @@ exports.approveEmergency = async (req, res) => {
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
-};  
+};
+exports.getAttendanceByUser = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const attendance = await Attendance.find({ userId })
+            .sort({ punchInTime: -1 });
+
+        res.json({
+            count: attendance.length,
+            attendance
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            message: err.message
+        });
+    }
+};
+exports.getMonthlyAttendance = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { month, year } = req.query;
+
+        const records = await Attendance.find({ userId });
+
+        const filtered = records.filter((att) => {
+            const date = new Date(att.date);
+
+            return (
+                date.toLocaleString("default", { month: "long" }) === month &&
+                date.getFullYear().toString() === year
+            );
+        });
+
+        let totalHours = 0;
+
+        filtered.forEach((r) => {
+            totalHours += r.workingHours || 0;
+        });
+
+        res.json({
+            month,
+            year,
+            totalDays: filtered.length,
+            totalHours,
+            attendance: filtered
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            message: err.message
+        });
+    }
+};
