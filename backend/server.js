@@ -41,6 +41,7 @@ app.use("/api/payroll", payrollRoutes);
 
 app.use("/api/salary-slip", salarySlipRoutes);
 
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
