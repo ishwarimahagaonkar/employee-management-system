@@ -1,10 +1,22 @@
 const Attendance = require("../models/Attendance");
 const { isWithinOffice } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
+const { COMPANY_LOCATION } = require("../config/location");
 
 exports.punchIn = async (req, res) => {
     try {
+        console.log("REQ BODY:", req.body);
         const { lat, lng } = req.body;
+
+        if (!lat || !lng) {
+            return res.status(400).json({
+                message: "Latitude and longitude required"
+            });
+        }
+
+        // OFFICE LOCATION (from config)
+        const officeLat = COMPANY_LOCATION.lat;
+        const officeLng = COMPANY_LOCATION.lng;
 
         const allowed = isWithinOffice(lat, lng);
 
