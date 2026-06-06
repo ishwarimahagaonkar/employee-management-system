@@ -3,59 +3,73 @@ const { isWithinOffice } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
 const { COMPANY_LOCATION } = require("../config/location");
 
+
 exports.punchIn = async (req, res) => {
-    try {
-        console.log("REQ BODY:", req.body);
-        const { lat, lng } = req.body;
+  try {
+    console.log("REQ USER:", req.user);
+    console.log("REQ BODY:", req.body);
+    const { lat, lng } = req.body;
+    const today = new Date();
+today.setHours(0, 0, 0, 0);
 
-        if (!lat || !lng) {
-            return res.status(400).json({
-                message: "Latitude and longitude required"
-            });
-        }
+    // Check if employee already punched in today
+    const existingAttendance = await Attendance.findOne({
+      userId: req.user._id,
+      date: today
+    });
 
-        // OFFICE LOCATION (from config)
-        const officeLat = COMPANY_LOCATION.lat;
-        const officeLng = COMPANY_LOCATION.lng;
-
-        const allowed = isWithinOffice(lat, lng);
-
-        if (!allowed) {
-            return res.status(403).json({
-                message: "Punch In denied: You are outside office location"
-            });
-        }
-
-        const today = new Date().toDateString();
-
-        const existing = await Attendance.findOne({
-            userId: req.user._id,
-            date: today
-        });
-
-        if (existing) {
-            return res.status(400).json({
-                message: "Already punched in today"
-            });
-        }
-
-        const attendance = await Attendance.create({
-            userId: req.user._id,
-            date: today,
-            punchInTime: new Date(),
-            punchInLocation: { lat, lng }
-        });
-
-        res.json({
-            message: "Punch In successful",
-            attendance
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+    if (existingAttendance) {
+      return res.status(400).json({
+        message: "Already punched in today"
+      });
     }
-};
 
+    if (!lat || !lng) {
+      return res.status(400).json({
+        message: "Location required for punch in"
+      });
+    }
+
+    const allowed = isWithinOffice(lat, lng);
+
+    if (!allowed) {
+      return res.status(403).json({
+        message: "You are outside office location. Punch In denied."
+      });
+    }
+
+    const now = new Date();
+
+    // Today's 9:30 AM
+    const lateTime = new Date();
+    lateTime.setHours(9, 30, 0, 0);
+
+    const attendanceStatus = now > lateTime ? "late" : "present";
+
+    const attendance = await Attendance.create({
+        userId: req.user._id,
+        date: today,
+
+        punchInTime: now,
+
+        punchInLocation: {
+            lat,
+            lng
+        },
+
+        status: attendanceStatus
+    });
+    res.status(200).json({
+      message: "Punch In successful",
+      status: attendanceStatus,
+      attendance
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 exports.punchOut = async (req, res) => {
     try {
         const { lat, lng } = req.body;
@@ -68,7 +82,8 @@ exports.punchOut = async (req, res) => {
             });
         }
 
-        const today = new Date().toDateString();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
         const attendance = await Attendance.findOne({
             userId: req.user._id,
@@ -92,7 +107,12 @@ exports.punchOut = async (req, res) => {
 
         attendance.workingHours = hours;
 
+        await attendance.save();
 
+        res.status(200).json({
+            message: "Punch Out successful",
+            attendance
+        });
 
 
     } catch (err) {
@@ -105,7 +125,8 @@ exports.requestEmergency = async (req, res) => {
         const { reason, type } = req.body;
         // type = "punchIn" or "punchOut"
 
-        const today = new Date().toDateString();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
         let attendance = await Attendance.findOne({
             userId: req.user._id,
@@ -222,4 +243,35 @@ exports.getMonthlyAttendance = async (req, res) => {
             message: err.message
         });
     }
+};
+exports.getMyAttendance = async (req, res) => {
+  try {
+    const attendance = await Attendance.find({
+      userId: req.user._id
+    }).sort({ date: -1 });
+
+    res.json(attendance);
+
+  } catch (err) {
+    res.status(500).json({
+      message: err.message
+    });
+  }
+};
+exports.getTodayAttendance = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const attendance = await Attendance.findOne({
+      userId: req.user._id,
+      date: today,
+    });
+
+    res.json(attendance);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
 };

@@ -1,6 +1,8 @@
-const COMPANY_LOCATION = {
-    lat: 18.5204,
-    lng: 73.8567
+// config/location.js
+module.exports = {
+  officeLocation: {
+    lat: 18.4423,   // example Pune
+    lng: 73.8566,
+    radius: 200     // meters allowed range
+  }
 };
-
-module.exports = { COMPANY_LOCATION };

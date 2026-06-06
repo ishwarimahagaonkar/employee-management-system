@@ -6,12 +6,16 @@ const {
     requestEmergency,
     approveEmergency,
     getAttendanceByUser,
-    getMonthlyAttendance
+    getMonthlyAttendance,
+    getMyAttendance,
+    getTodayAttendance
 } = require("../controllers/attendanceController");
 
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.get("/my-attendance", protect, getMyAttendance);
 
 router.post("/punch-in", protect, punchIn);
 router.post("/punch-out", protect, punchOut);
@@ -24,6 +28,12 @@ router.get("/monthly", protect, getMonthlyAttendance);
 router.get(
     "/",
     protect,
+    adminOnly,
     getAttendanceByUser
+);
+router.get(
+  "/today",
+  protect,
+  getTodayAttendance
 );
 module.exports = router;
