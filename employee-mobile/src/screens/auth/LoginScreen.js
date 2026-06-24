@@ -35,11 +35,7 @@ const handleLogin = async () => {
 
     await AsyncStorage.setItem("token", token);
 
-    navigation.replace(
-      user.role === "admin"
-        ? "AdminDashboard"
-        : "EmployeeDashboard"
-    );
+    isLoggedIn(true);
 
   } catch (err) {
     console.log("LOGIN ERROR FULL:", err.response?.data || err.message);

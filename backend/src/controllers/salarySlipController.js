@@ -11,12 +11,22 @@ exports.generateSalarySlip = async (req, res) => {
         const records = await Attendance.find({ userId });
 
         const filtered = records.filter((att) => {
-            const date = new Date(att.date);
+            if (!att.date) return false;
+            const [y, m, d] = att.date.split("-");
+            if (y !== year.toString()) return false;
 
-            return (
-                date.toLocaleString("default", { month: "long" }) === month &&
-                date.getFullYear().toString() === year
-            );
+            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+            const mIdx = parseInt(m, 10) - 1;
+            const recordMonthLong = monthNames[mIdx];
+            const recordMonthShort = shortMonthNames[mIdx];
+
+            const searchMonth = month.toString().toLowerCase();
+            return searchMonth === recordMonthLong ||
+                   searchMonth === recordMonthShort ||
+                   searchMonth === m ||
+                   parseInt(searchMonth, 10) === parseInt(m, 10);
         });
 
         let totalHours = 0;

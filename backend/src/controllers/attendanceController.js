@@ -1,271 +1,358 @@
+// Attendance Model
 const Attendance = require("../models/Attendance");
+
+// Utility functions
 const { isWithinOffice } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
+
+// Company office coordinates
 const { COMPANY_LOCATION } = require("../config/location");
 
 
+/**
+ * @desc Employee Punch In
+ * @route POST /attendance/punch-in
+ * @access Private
+ *
+ * Checks:
+ * - User has not already punched in today
+ * - Location is within office radius
+ * - Marks attendance as Present or Late
+ */
 exports.punchIn = async (req, res) => {
+
   try {
     console.log("REQ USER:", req.user);
     console.log("REQ BODY:", req.body);
-    const { lat, lng } = req.body;
-    const today = new Date();
-today.setHours(0, 0, 0, 0);
 
-    // Check if employee already punched in today
+    const { lat, lng, address } = req.body;
+    
+
+    // Create today's date string in Asia/Kolkata timezone (YYYY-MM-DD)
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+    // Prevent multiple punch-ins on same day
     const existingAttendance = await Attendance.findOne({
       userId: req.user._id,
-      date: today
+      date: todayStr,
     });
 
     if (existingAttendance) {
       return res.status(400).json({
-        message: "Already punched in today"
+        message: "Already punched in today",
       });
     }
 
+    // Validate location data
     if (!lat || !lng) {
       return res.status(400).json({
-        message: "Location required for punch in"
+        message: "Location required for punch in",
       });
     }
 
+    // Verify employee is within office premises
     const allowed = isWithinOffice(lat, lng);
 
     if (!allowed) {
       return res.status(403).json({
-        message: "You are outside office location. Punch In denied."
+        message: "You are outside office location. Punch In denied.",
       });
     }
 
     const now = new Date();
 
-    // Today's 9:30 AM
-    const lateTime = new Date();
-    lateTime.setHours(9, 30, 0, 0);
+    // Attendance is marked late after 9:30 AM in Asia/Kolkata timezone
+    const nowInKolkata = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const hours = nowInKolkata.getHours();
+    const minutes = nowInKolkata.getMinutes();
+    const attendanceStatus = (hours > 9 || (hours === 9 && minutes > 30)) ? "late" : "present";
 
-    const attendanceStatus = now > lateTime ? "late" : "present";
-
+    // Create attendance record
     const attendance = await Attendance.create({
-        userId: req.user._id,
-        date: today,
-
-        punchInTime: now,
-
-        punchInLocation: {
-            lat,
-            lng
-        },
-
-        status: attendanceStatus
+      userId: req.user._id,
+      date: todayStr,
+      punchInTime: now,
+      punchInLocation: {
+        lat,
+        lng,
+        address,
+      },
+      
+      status: attendanceStatus,
     });
+
     res.status(200).json({
       message: "Punch In successful",
       status: attendanceStatus,
-      attendance
+      attendance,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+/**
+ * @desc Employee Punch Out
+ * @route POST /attendance/punch-out
+ * @access Private
+ *
+ * Checks:
+ * - Employee is inside office location
+ * - Punch-in exists for today
+ * - Calculates working hours
+ */
 exports.punchOut = async (req, res) => {
-    try {
-        const { lat, lng } = req.body;
-
-        const allowed = isWithinOffice(lat, lng);
-
-        if (!allowed) {
-            return res.status(403).json({
-                message: "Punch Out denied: You are outside office location"
-            });
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const attendance = await Attendance.findOne({
-            userId: req.user._id,
-            date: today
-        });
-
-        if (!attendance) {
-            return res.status(404).json({
-                message: "No punch in found"
-            });
-        }
-
-        attendance.punchOutTime = new Date();
-        attendance.punchOutLocation = { lat, lng };
-
-        // calculate working hours
-        const hours = calculateWorkingHours(
-            attendance.punchInTime,
-            attendance.punchOutTime
-        );
-
-        attendance.workingHours = hours;
-
-        await attendance.save();
-
-        res.status(200).json({
-            message: "Punch Out successful",
-            attendance
-        });
-
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-
-exports.requestEmergency = async (req, res) => {
-    try {
-        const { reason, type } = req.body;
-        // type = "punchIn" or "punchOut"
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        let attendance = await Attendance.findOne({
-            userId: req.user._id,
-            date: today
-        });
-
-        if (!attendance && type === "punchIn") {
-            attendance = await Attendance.create({
-                userId: req.user._id,
-                date: today,
-                emergencyRequest: true,
-                emergencyReason: reason,
-                status: "pending"
-            });
-        } else {
-            attendance.emergencyRequest = true;
-            attendance.emergencyReason = reason;
-            attendance.status = "pending";
-            await attendance.save();
-        }
-
-        res.json({
-            message: "Emergency request sent to admin",
-            attendance
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-exports.approveEmergency = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { action } = req.body;
-        const { comment } = req.body;
-        // action = approve / reject
-
-        const attendance = await Attendance.findById(id);
-
-        if (!attendance) {
-            return res.status(404).json({ message: "Not found" });
-        }
-
-        if (action === "approve") {
-            attendance.status = "approved";
-        } else {
-            attendance.status = "rejected";
-        }
-        attendance.adminComment = comment || "No comment provided";
-
-
-        await attendance.save();
-
-
-        res.json({
-            message: `Request ${action}d successfully`,
-            attendance
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-exports.getAttendanceByUser = async (req, res) => {
-    try {
-        const userId = req.user._id;
-
-        const attendance = await Attendance.find({ userId })
-            .sort({ punchInTime: -1 });
-
-        res.json({
-            count: attendance.length,
-            attendance
-        });
-
-    } catch (err) {
-        res.status(500).json({
-            message: err.message
-        });
-    }
-};
-exports.getMonthlyAttendance = async (req, res) => {
-    try {
-        const userId = req.user._id;
-        const { month, year } = req.query;
-
-        const records = await Attendance.find({ userId });
-
-        const filtered = records.filter((att) => {
-            const date = new Date(att.date);
-
-            return (
-                date.toLocaleString("default", { month: "long" }) === month &&
-                date.getFullYear().toString() === year
-            );
-        });
-
-        let totalHours = 0;
-
-        filtered.forEach((r) => {
-            totalHours += r.workingHours || 0;
-        });
-
-        res.json({
-            month,
-            year,
-            totalDays: filtered.length,
-            totalHours,
-            attendance: filtered
-        });
-
-    } catch (err) {
-        res.status(500).json({
-            message: err.message
-        });
-    }
-};
-exports.getMyAttendance = async (req, res) => {
   try {
-    const attendance = await Attendance.find({
-      userId: req.user._id
-    }).sort({ date: -1 });
+    const { lat, lng, address } = req.body;
 
-    res.json(attendance);
 
+    // Verify employee location
+    const allowed = isWithinOffice(lat, lng);
+
+    if (!allowed) {
+      return res.status(403).json({
+        message: "Punch Out denied: You are outside office location",
+      });
+    }
+
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+    // Find today's attendance record
+    const attendance = await Attendance.findOne({
+      userId: req.user._id,
+      date: todayStr,
+    });
+
+    if (!attendance) {
+      return res.status(404).json({
+        message: "No punch in found",
+      });
+    }
+
+    // Store punch-out details
+    attendance.punchOutTime = new Date();
+    attendance.punchOutLocation = { lat, lng, address, };
+    
+
+    // Calculate total working hours
+    const hours = calculateWorkingHours(
+      attendance.punchInTime,
+      attendance.punchOutTime
+    );
+
+    attendance.workingHours = hours;
+
+    await attendance.save();
+
+    res.status(200).json({
+      message: "Punch Out successful",
+      attendance,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+/**
+ * @desc Request Emergency Attendance Approval
+ * @route POST /attendance/emergency
+ * @access Private
+ *
+ * Used when employee cannot punch in/out
+ * due to location restrictions or other issues.
+ */
+exports.requestEmergency = async (req, res) => {
+  try {
+    const { reason, type } = req.body;
+
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+    let attendance = await Attendance.findOne({
+      userId: req.user._id,
+      date: todayStr,
+    });
+
+    // Create emergency attendance request
+    if (!attendance && type === "punchIn") {
+      attendance = await Attendance.create({
+        userId: req.user._id,
+        date: todayStr,
+        emergencyRequest: true,
+        emergencyReason: reason,
+        status: "pending",
+      });
+    } else {
+      attendance.emergencyRequest = true;
+      attendance.emergencyReason = reason;
+      attendance.status = "pending";
+
+      await attendance.save();
+    }
+
+    res.json({
+      message: "Emergency request sent to admin",
+      attendance,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+/**
+ * @desc Approve or Reject Emergency Request
+ * @route PUT /attendance/emergency/:id
+ * @access Admin
+ */
+exports.approveEmergency = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, comment } = req.body;
+
+    const attendance = await Attendance.findById(id);
+
+    if (!attendance) {
+      return res.status(404).json({
+        message: "Not found",
+      });
+    }
+
+    // Update request status
+    attendance.status =
+      action === "approve" ? "approved" : "rejected";
+
+    // Save admin remarks
+    attendance.adminComment =
+      comment || "No comment provided";
+
+    await attendance.save();
+
+    res.json({
+      message: `Request ${action}d successfully`,
+      attendance,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+/**
+ * @desc Get Complete Attendance History
+ * @route GET /attendance/user
+ * @access Private
+ */
+exports.getAttendanceByUser = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const attendance = await Attendance.find({ userId })
+      .sort({ punchInTime: -1 });
+
+    res.json({
+      count: attendance.length,
+      attendance,
+    });
   } catch (err) {
     res.status(500).json({
-      message: err.message
+      message: err.message,
     });
   }
 };
+
+
+/**
+ * @desc Get Monthly Attendance Summary
+ * @route GET /attendance/monthly
+ * @access Private
+ *
+ * Returns:
+ * - Total working days
+ * - Total working hours
+ * - Attendance records for selected month
+ */
+exports.getMonthlyAttendance = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { month, year } = req.query;
+
+    const records = await Attendance.find({ userId });
+
+    const filtered = records.filter((att) => {
+      if (!att.date) return false;
+      const [y, m, d] = att.date.split("-");
+      if (y !== year.toString()) return false;
+
+      const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+      const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+      const mIdx = parseInt(m, 10) - 1;
+      const recordMonthLong = monthNames[mIdx];
+      const recordMonthShort = shortMonthNames[mIdx];
+
+      const searchMonth = month.toString().toLowerCase();
+      return searchMonth === recordMonthLong ||
+             searchMonth === recordMonthShort ||
+             searchMonth === m ||
+             parseInt(searchMonth, 10) === parseInt(m, 10);
+    });
+
+    let totalHours = 0;
+
+    filtered.forEach((record) => {
+      totalHours += record.workingHours || 0;
+    });
+
+    res.json({
+      month,
+      year,
+      totalDays: filtered.length,
+      totalHours,
+      attendance: filtered,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
+
+/**
+ * @desc Get Logged-in User Attendance
+ * @route GET /attendance/me
+ * @access Private
+ */
+exports.getMyAttendance = async (req, res) => {
+  try {
+    const attendance = await Attendance.find({
+      userId: req.user._id,
+    }).sort({ date: -1 });
+
+    res.json(attendance);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
+
+/**
+ * @desc Get Today's Attendance Record
+ * @route GET /attendance/today
+ * @access Private
+ */
 exports.getTodayAttendance = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
     const attendance = await Attendance.findOne({
       userId: req.user._id,
-      date: today,
+      date: todayStr,
     });
 
     res.json(attendance);

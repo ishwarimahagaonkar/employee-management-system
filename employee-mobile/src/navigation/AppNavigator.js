@@ -1,47 +1,13 @@
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import LoginScreen from "../screens/auth/LoginScreen";
-import AdminDashboard from "../screens/admin/AdminDashboard";
-import BottomTabNavigator from "../screens/employee/BottomTabNavigator";
-import AttendanceHistory from "../screens/employee/AttendanceHistory";
+import AuthStack from "./AuthStack";
+import MainStack from "./MainStack";
 
-const Stack = createNativeStackNavigator();
-
-export default function AppNavigator() {
+export default function AppNavigator({ isLoggedIn }) {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
-
-        {/* Login */}
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          options={{ headerShown: false }}
-        />
-
-        {/* Admin */}
-        <Stack.Screen
-          name="AdminDashboard"
-          component={AdminDashboard}
-          options={{ headerShown: false }}
-        />
-
-        {/* Employee */}
-        <Stack.Screen
-          name="EmployeeDashboard"
-          component={BottomTabNavigator}
-          options={{ headerShown: false }}
-        />
-
-        {/* Attendance History */}
-        <Stack.Screen
-          name="AttendanceHistory"
-          component={AttendanceHistory}
-          options={{ headerShown: false }}
-        />
-
-      </Stack.Navigator>
+      {isLoggedIn ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }

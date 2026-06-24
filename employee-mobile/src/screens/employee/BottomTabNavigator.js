@@ -1,9 +1,9 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 
-import EmployeeDashboard from "./EmployeeDashboard";
-import AttendanceScreen from "./AttendanceScreen";
+import EmployeeDashboard from "./Home/EmployeeDashboard";
+import AttendanceScreen from "./Attendance/AttendanceScreen";
 import TravelScreen from "./TravelScreen";
 import LeaveScreen from "./LeaveScreen";
 import ProfileScreen from "./ProfileScreen";
@@ -57,6 +57,7 @@ export default function BottomTabNavigator() {
         },
       })}
     >
+     
       <Tab.Screen
         name="Home"
         component={EmployeeDashboard}

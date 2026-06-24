@@ -1,9 +1,9 @@
 import React from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
 } from "react-native";
@@ -59,7 +59,7 @@ export default function EmployeeDashboard({ navigation }) {
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() =>
-              navigation.navigate("Attendance")
+              navigation.navigate("AttendanceScreen")
             }
           >
             <Text style={styles.secondaryText}>

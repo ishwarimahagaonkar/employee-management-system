@@ -24,8 +24,6 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   return R * c; // meters
 };
 
-module.exports = { getDistance };
-
 const isWithinOffice = (lat, lng) => {
   if (!lat || !lng) return false;
 
@@ -39,4 +37,4 @@ const isWithinOffice = (lat, lng) => {
   return distance <= officeLocation.radius;
 };
 
-module.exports = { isWithinOffice };
+module.exports = { getDistance, isWithinOffice };

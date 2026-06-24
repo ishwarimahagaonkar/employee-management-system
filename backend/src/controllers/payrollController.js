@@ -15,16 +15,30 @@ exports.calculateMonthlySalary = async (req, res) => {
         }
 
         // get all attendance records
-        const records = await Attendance.find({
-            userId,
-            date: {
-                $regex: `${month} ${year}`
-            }
+        const records = await Attendance.find({ userId });
+
+        const filtered = records.filter(record => {
+            if (!record.date) return false;
+            const [y, m, d] = record.date.split("-");
+            if (y !== year.toString()) return false;
+
+            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+            const mIdx = parseInt(m, 10) - 1;
+            const recordMonthLong = monthNames[mIdx];
+            const recordMonthShort = shortMonthNames[mIdx];
+
+            const searchMonth = month.toString().toLowerCase();
+            return searchMonth === recordMonthLong ||
+                   searchMonth === recordMonthShort ||
+                   searchMonth === m ||
+                   parseInt(searchMonth, 10) === parseInt(m, 10);
         });
 
         let totalHours = 0;
 
-        records.forEach(record => {
+        filtered.forEach(record => {
             totalHours += record.workingHours || 0;
         });
 

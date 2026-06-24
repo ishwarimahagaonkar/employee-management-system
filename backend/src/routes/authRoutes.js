@@ -3,6 +3,7 @@ const express = require("express");
 const {
     register,
     login,
+    logout,
 } = require("../controllers/authController");
 
 const router = express.Router();
@@ -14,5 +15,8 @@ router.post("/login", login);
 router.get("/test", (req, res) => {
   res.json({ message: "Backend working" });
 });
+
+
+router.post("/logout", logout);
 
 module.exports = router;

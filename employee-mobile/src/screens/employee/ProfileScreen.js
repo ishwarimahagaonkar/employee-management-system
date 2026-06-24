@@ -6,14 +6,29 @@ import {
   Image,
   TouchableOpacity,
 } from "react-native";
+import axios from "axios";
+import API from "../../api/api"
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export default function ProfileScreen() {
+export default function ProfileScreen({navigation}) {
+  const logout = async () => {
+    try {
+      await API.post("/auth/logout");
+
+      await AsyncStorage.removeItem("token");
+
+      setIsLoggedIn(false);
+
+    } catch (error) {
+      console.log("Logout error:", error);
+    }
+  };
   return (
     <View style={styles.container}>
       {/* Profile Image */}
       <Image
         source={{
-          uri: "https://ui-avatars.com/api/?name=Employee",
+          uri: "http://ui-avatars.com/api/?name=Employee",
         }}
         style={styles.avatar}
       />
@@ -37,7 +52,7 @@ export default function ProfileScreen() {
         <Text style={styles.value}>Software Engineer</Text>
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </View>

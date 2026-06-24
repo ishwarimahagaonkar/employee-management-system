@@ -1,0 +1,512 @@
+// AttendanceScreen.js
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Linking,
+} from "react-native";
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
+import { CameraView, Camera } from "expo-camera";   // ✅ Correct imports
+import api from "../../../api/api.js";
+import AttendanceCard from "./AttendanceCard.js";
+import MonthlyAttendance from "./MonthlyAttendance.js";
+
+export default function AttendanceScreen() {
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [markedDates, setMarkedDates] = useState({});
+  const [cameraPermission, setCameraPermission] = useState(null);
+  const [locationPermission, setLocationPermission] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const cameraRef = useRef(null);   // ✅ Proper ref
+  const navigation = useNavigation();
+
+  const hasPunchedIn =
+    Boolean(todayAttendance?.punchInTime && !todayAttendance?.punchOutTime);
+  const hasPunchedOut =
+    Boolean(todayAttendance?.punchInTime && todayAttendance?.punchOutTime);
+  
+    
+
+  // Monthly summary counts
+  const presentCount =
+    attendanceHistory.filter((item) => item.status?.toLowerCase() === "present").length || 0;
+  const lateCount =
+    attendanceHistory.filter((item) => item.status?.toLowerCase() === "late").length || 0;
+  const absentCount =
+    attendanceHistory.filter((item) => item.status?.toLowerCase() === "absent").length || 0;
+
+  // Unified fetch
+  const fetchAttendanceData = async () => {
+    try {
+      
+      const token = await AsyncStorage.getItem("token");
+
+      const [todayRes, historyRes] = await Promise.all([
+        api.get("/attendance/today", { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/attendance/my-attendance", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      setTodayAttendance(todayRes.data);
+      setAttendanceHistory(historyRes.data);
+
+      // Format marked dates
+      const formatted = {};
+      historyRes.data.forEach((item) => {
+        if (!item.punchInTime) return;
+        const date = new Date(item.punchInTime).toISOString().split("T")[0];
+        formatted[date] = {
+          marked: true,
+          dotColor: item.status === "late" ? "orange" : "green",
+        };
+      });
+      setMarkedDates(formatted);
+    } catch (err) {
+      console.log(err.response?.data || err.message);
+    } finally {
+      setLoading(false);
+    }
+    
+  };
+
+  useEffect(() => {
+    fetchAttendanceData();
+       const requestPermissions = async () => {
+        const camera = await Camera.requestCameraPermissionsAsync();
+        const location = await Location.requestForegroundPermissionsAsync();
+
+        setCameraPermission(camera.granted);
+        setLocationPermission(location.granted);
+      };
+
+      requestPermissions();
+      fetchAttendanceData();
+  }, []);
+
+  const handlePunch = async (type) => {
+    try {
+      setShowCamera(true);
+
+    // Give camera a moment to start
+    await new Promise(resolve => setTimeout(resolve, 1000));
+// Camera permission
+    const cameraPermission =
+      await Camera.getCameraPermissionsAsync();
+
+    let cameraGranted = cameraPermission.granted;
+
+    if (!cameraGranted && cameraPermission.canAskAgain) {
+      const result =
+        await Camera.requestCameraPermissionsAsync();
+      cameraGranted = result.granted;
+    }
+
+    // Location permission
+    const locationPermission =
+      await Location.getForegroundPermissionsAsync();
+
+    let locationGranted = locationPermission.granted;
+
+    if (!locationGranted && locationPermission.canAskAgain) {
+      const result =
+        await Location.requestForegroundPermissionsAsync();
+      locationGranted = result.granted;
+    }
+
+    if (!cameraGranted || !locationGranted) {
+      Alert.alert(
+        "Permissions Required",
+        "Camera and Location permissions are required.",
+        [
+          {
+            text: "Open Settings",
+            onPress: () => Linking.openSettings(),
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+        ]
+      );
+      return;
+    }
+      // Capture selfie
+      let photo = null;
+      if (cameraRef.current) {
+        photo = await cameraRef.current.takePictureAsync({ base64: true });
+
+        // Close camera after capture
+        setShowCamera(false);
+      }
+      // Get location
+      const location = await Location.getCurrentPositionAsync({});
+
+      let readableAddress = "Address unavailable";
+
+      try {
+        const addresses = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        if (addresses.length > 0) {
+          const address = addresses[0];
+          readableAddress = [
+            address.name,
+            address.street,
+            address.district,
+            address.city,
+            address.region,
+            address.postalCode,
+            address.country,
+          ]
+            .filter(Boolean)
+            .join(", ");
+        }
+      } catch (err) {
+        console.log("Reverse geocode failed:", err.message);
+      }
+
+      // Send to backend
+      const token = await AsyncStorage.getItem("token");
+      const res = await api.post(
+        `/attendance/${type}`,
+        {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+          photo: photo ? photo.base64 : null,
+          address: readableAddress,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert(res.data.message);
+      await fetchAttendanceData();
+    } catch (err) {
+      alert(err.response?.data?.message || `${type} failed`);
+      console.log(err.response?.data || err.message);
+    }
+    console.log("hasPunchedOut:", hasPunchedOut, typeof hasPunchedOut);
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      {/* Top Card */}
+      <View style={styles.headerCard}>
+        <Text style={styles.heading}>Attendance</Text>
+        <View style={styles.locationContainer}>
+          {/* Location */}
+          <View style={styles.locationRow}>
+            <View style={styles.locationIcon}>
+              <Ionicons name="location-outline" size={24} color="#fff" />
+            </View>
+            <View>
+              <Text style={styles.locationTitle}>Current Location</Text>
+              <Text style={styles.locationSubTitle}>Within Office Geofence</Text>
+            </View>
+          </View>
+
+          {/* Camera Preview */}
+          <View style={styles.mapPlaceholder}>
+            {showCamera && (
+              <CameraView
+                style={{ width: "100%", height: "100%" }}
+                ref={cameraRef}
+                facing="front"
+              />
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.punchButton}
+            disabled={hasPunchedOut}
+            
+            onPress={() => {
+              setShowCamera(true);
+              hasPunchedIn
+                ? handlePunch("punch-out")
+                : handlePunch("punch-in");
+            }}
+          >
+          
+          
+            <Text style={styles.punchText}>
+              {hasPunchedIn
+                ? "Punch Out"
+                : hasPunchedOut
+                ? "Attendance Completed"
+                : "Punch In"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Monthly Summary */}
+      <View style={styles.summaryCard}>
+        <Text style={styles.sectionTitle}>This Month</Text>
+        <View style={styles.statsRow}>
+          {/* Present */}
+          <View style={styles.statItem}>
+            <View style={[styles.iconCircle, { backgroundColor: "#ECEAFF" }]}>
+              <Ionicons name="checkmark-circle-outline" size={24} color="#6C63FF" />
+            </View>
+            <Text style={styles.count}>{presentCount}</Text>
+            <Text style={styles.statLabel}>Present</Text>
+          </View>
+          {/* Late */}
+          <View style={styles.statItem}>
+            <View style={[styles.iconCircle, { backgroundColor: "#FFECEC" }]}>
+              <MaterialIcons name="access-time" size={22} color="#FF5B5B" />
+            </View>
+            <Text style={styles.count}>{lateCount}</Text>
+            <Text style={styles.statLabel}>Late</Text>
+          </View>
+          {/* Absent */}
+          <View style={styles.statItem}>
+            <View style={[styles.iconCircle, { backgroundColor: "#EEF2F6" }]}>
+              <Feather name="x-circle" size={22} color="#7B8794" />
+            </View>
+            <Text style={styles.count}>{absentCount}</Text>
+            <Text style={styles.statLabel}>Absent</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Attendance History */}
+      <View style={styles.historyHeader}>
+        <Text style={styles.historyTitle}>Attendance History</Text>
+        <TouchableOpacity onPress={() => navigation.navigate("MonthlyAttendance")}>
+          <Ionicons name="chevron-forward-circle-outline" style={styles.navigateIcon} size={28} color="#6a697d" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#b463ff" style={{ marginTop: 20 }} />
+      ) : attendanceHistory.length === 0 ? (
+        <Text style={{ textAlign: "center", marginTop: 20, color: "#777" }}>
+          No attendance records found
+        </Text>
+      ) : (
+        attendanceHistory
+          .sort((a, b) => new Date(b.punchInTime) - new Date(a.punchInTime))
+          .slice(0, 3)
+          .map((item) => {
+            const punchInDate = new Date(item.punchInTime);
+            const punchOutDate = item.punchOutTime ? new Date(item.punchOutTime) : null;
+            return (
+              <AttendanceCard
+                key={item._id}
+                date={punchInDate.toDateString()}
+                punchIn={punchInDate.toLocaleTimeString()}
+                punchOut={punchOutDate ? punchOutDate.toLocaleTimeString() : null}
+                status={item.status}
+              />
+            );
+          })
+      )}
+
+      <View style={{ height: 100 }} />
+    </ScrollView>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F4F5F7",
+  },
+
+  headerCard: {
+    backgroundColor: "#6C63FF",
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
+  },
+
+  heading: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: "700",
+    marginBottom: 25,
+  },
+
+  locationContainer: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 24,
+    padding: 20,
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
+  locationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  locationTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  locationSubTitle: {
+    color: "#E6E6FA",
+    fontSize: 13,
+  },
+
+  mapPlaceholder: {
+    height: 150,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  punchButton: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+
+  punchText: {
+    color: "#6C63FF",
+    fontWeight: "700",
+    fontSize: 18,
+  },
+
+  summaryCard: {
+    backgroundColor: "#fff",
+    margin: 20,
+    borderRadius: 24,
+    padding: 20,
+    elevation: 2,
+  },
+
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 20,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+
+  statItem: {
+    alignItems: "center",
+  },
+
+  historyHeader:{
+    flexDirection: 'row',          // Places text and button on the same line
+    justifyContent: 'space-between', // Pushes text to left, button to far right
+    alignItems: 'center',          // Centers them vertically perfectly
+    paddingHorizontal: 10,         // Adjust this to match your cards' alignment
+    marginTop: 20,                 // Spacing above the header
+    marginBottom: 10,
+  },
+  navigateIcon:{
+    paddingBottom:10,
+    paddingRight:10,
+  },
+
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+    
+  },
+
+  statNumber: {
+    fontSize: 28,
+    fontWeight: "700",
+  },
+
+  statLabel: {
+    color: "#666",
+    marginTop: 4,
+  },
+
+  historyTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    marginHorizontal: 20,
+    marginBottom: 15,
+  },
+
+  historyCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  historyLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  calendarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#F1EEFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  dateText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  dayText: {
+    color: "#777",
+    marginTop: 2,
+  },
+
+  presentBadge: {
+    backgroundColor: "#ECEAFF",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  badgeText: {
+    color: "#6C63FF",
+    fontWeight: "600",
+  },
+  
+});
