@@ -55,7 +55,7 @@ A full-stack Employee Management System built using React Native (Expo), Node.js
     REST APIs
 
 ## PROJECT STRUCTURE
-
+```text
 EMPLOYEE-MANAGEMENT-SYSTEM
 │
 ├── backend
@@ -123,7 +123,7 @@ EMPLOYEE-MANAGEMENT-SYSTEM
 │   └── package-lock.json
 │
 └── README.md
-
+```
 ## API MODULES
 
 ### Authentication Module
