@@ -1,13 +1,21 @@
-import React from "react";
+import React, { useContext } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 
 import AuthStack from "./AuthStack";
 import MainStack from "./MainStack";
 
-export default function AppNavigator({ isLoggedIn }) {
+import { AuthContext } from "../context/AuthContext";
+
+export default function AppNavigator() {
+  const { token, loading } = useContext(AuthContext);
+
+  if (loading) {
+    return null;
+  }
+
   return (
     <NavigationContainer>
-      {isLoggedIn ? <MainStack /> : <AuthStack />}
+      {token ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import {
   View,
   Text,
@@ -9,15 +9,15 @@ import {
 import axios from "axios";
 import API from "../../api/api"
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthContext } from "../../context/AuthContext";
 
 export default function ProfileScreen({navigation}) {
-  const logout = async () => {
+  const {logout} = useContext(AuthContext);
+  const handleLogout = async () => {
     try {
       await API.post("/auth/logout");
 
-      await AsyncStorage.removeItem("token");
-
-      setIsLoggedIn(false);
+      await logout();
 
     } catch (error) {
       console.log("Logout error:", error);
@@ -52,7 +52,7 @@ export default function ProfileScreen({navigation}) {
         <Text style={styles.value}>Software Engineer</Text>
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </View>

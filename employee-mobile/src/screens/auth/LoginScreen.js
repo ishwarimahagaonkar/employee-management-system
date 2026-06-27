@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import API from "../../api/api.js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -9,10 +9,12 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthContext } from "../../context/AuthContext.js";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const {login} = useContext(AuthContext);
 
 const handleLogin = async () => {
   try {
@@ -26,16 +28,14 @@ const handleLogin = async () => {
     console.log("LOGIN RESPONSE STATUS:", res.status);
     console.log("LOGIN RESPONSE DATA:", res.data);
 
-    const { token, user } = res.data;
+    const { token } = res.data;
 
     if (!token) {
       alert("No token received from server");
       return;
     }
 
-    await AsyncStorage.setItem("token", token);
-
-    isLoggedIn(true);
+    await login(token);//Context handling storage and state
 
   } catch (err) {
     console.log("LOGIN ERROR FULL:", err.response?.data || err.message);
