@@ -4,8 +4,8 @@ import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 
 import EmployeeDashboard from "./Home/EmployeeDashboard";
 import AttendanceScreen from "./Attendance/AttendanceScreen";
-import TravelScreen from "./TravelScreen";
-import LeaveScreen from "./LeaveScreen";
+import TravelScreen from "./Travel/TravelScreen";
+import LeaveScreen from "./Leave/LeaveScreen";
 import ProfileScreen from "./ProfileScreen";
 
 const Tab = createBottomTabNavigator();
