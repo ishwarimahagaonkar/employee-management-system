@@ -217,4 +217,4 @@ Full Stack Developer
 
 ## ⭐ Support
 
-If you found this project helpful, please consider giving it a Star on GitHub.
+If you found this project helpful, please consider giving it a star on git
