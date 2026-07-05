@@ -80,6 +80,21 @@ exports.getAllEmployees = async (req, res) => {
 
 
 // ==========================
+// GET MY PROFILE (LOGGED-IN EMPLOYEE)
+// ==========================
+exports.getMyProfile = async (req, res) => {
+    try {
+        return res.status(200).json(req.user);
+
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+        });
+    }
+};
+
+
+// ==========================
 // GET EMPLOYEE BY ID
 // ==========================
 exports.getEmployeeById = async (req, res) => {

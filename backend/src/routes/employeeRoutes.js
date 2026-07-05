@@ -3,6 +3,7 @@ const express = require("express");
 const {
     createEmployee,
     getAllEmployees,
+    getMyProfile,
     getEmployeeById,
     updateEmployee,
     deleteEmployee,
@@ -21,6 +22,9 @@ router.post("/", protect, adminOnly, createEmployee);
 
 // Get all employees
 router.get("/", protect, adminOnly, getAllEmployees);
+
+// Get logged-in employee's own profile
+router.get("/me", protect, getMyProfile);
 
 // Get single employee
 router.get("/:id", protect, adminOnly, getEmployeeById);
