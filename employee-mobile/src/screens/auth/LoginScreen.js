@@ -28,14 +28,14 @@ const handleLogin = async () => {
     console.log("LOGIN RESPONSE STATUS:", res.status);
     console.log("LOGIN RESPONSE DATA:", res.data);
 
-    const { token } = res.data;
+    const { token, user } = res.data;
 
     if (!token) {
       alert("No token received from server");
       return;
     }
 
-    await login(token);//Context handling storage and state
+    await login(token, user);//Context handling storage and state
 
   } catch (err) {
     console.log("LOGIN ERROR FULL:", err.response?.data || err.message);
