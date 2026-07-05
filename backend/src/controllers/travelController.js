@@ -109,7 +109,7 @@ exports.endTrip = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "No active trip to end"
-            });b
+            });
         }
 
         const endTime = new Date();

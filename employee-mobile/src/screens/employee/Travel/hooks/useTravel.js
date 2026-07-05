@@ -6,7 +6,9 @@ import { Alert } from "react-native";
 
 export default function useTravel() {
   const [todayTravel, setTodayTravel] = useState(null);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [activeTrip, setActiveTrip] = useState(false);
   const [btnLoading, setBtnLoading] = useState(false);
 
@@ -33,17 +35,68 @@ export default function useTravel() {
     }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const res = await api.get("/travel/history", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const days = res.data?.data || [];
+
+      const allTrips = days
+        .flatMap((day) => (day.trips || []).map((trip) => ({ ...trip, date: day.date })))
+        .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+      setHistory(allTrips);
+    } catch (err) {
+      console.log(err.response?.data || err.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTravel();
+    fetchHistory();
   }, []);
 
   const getLocation = async () => {
+    const permission = await Location.getForegroundPermissionsAsync();
+    let granted = permission.granted;
+
+    if (!granted && permission.canAskAgain) {
+      const result = await Location.requestForegroundPermissionsAsync();
+      granted = result.granted;
+    }
+
+    if (!granted) {
+      throw new Error("Location permission is required to track travel");
+    }
+
     const location = await Location.getCurrentPositionAsync({});
-    return {
-      lat: location.coords.latitude,
-      lng: location.coords.longitude,
-      address: "Unknown",
-    };
+    const { latitude, longitude } = location.coords;
+
+    let address = "Address unavailable";
+
+    try {
+      const addresses = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+
+      if (addresses.length > 0) {
+        const a = addresses[0];
+        address = [a.name, a.street, a.district, a.city, a.region, a.postalCode, a.country]
+          .filter(Boolean)
+          .join(", ");
+      }
+    } catch (err) {
+      console.log("Reverse geocode failed:", err.message);
+    }
+
+    return { lat: latitude, lng: longitude, address };
   };
 
   const startTrip = async (purpose, onSuccess) => {
@@ -68,7 +121,7 @@ export default function useTravel() {
       await fetchTravel();
       onSuccess?.();
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.message || "Failed");
+      Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
     } finally {
       setBtnLoading(false);
     }
@@ -76,6 +129,8 @@ export default function useTravel() {
 
   const endTrip = async () => {
     try {
+      setBtnLoading(true);
+
       const token = await AsyncStorage.getItem("token");
       const loc = await getLocation();
 
@@ -84,24 +139,30 @@ export default function useTravel() {
       });
 
       Alert.alert("Success", "Trip Ended");
-      fetchTravel();
+      await fetchTravel();
+      await fetchHistory();
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.message || "Failed");
+      Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
+    } finally {
+      setBtnLoading(false);
     }
   };
 
-  const currentPurpose =
+  const currentTrip =
     todayTravel?.trips?.length > 0
-      ? todayTravel.trips[todayTravel.trips.length - 1]?.purpose
-      : "";
+      ? todayTravel.trips[todayTravel.trips.length - 1]
+      : null;
 
   return {
     todayTravel,
+    history,
     loading,
+    historyLoading,
     activeTrip,
     btnLoading,
-    currentPurpose,
+    currentTrip,
     fetchTravel,
+    fetchHistory,
     startTrip,
     endTrip,
   };
