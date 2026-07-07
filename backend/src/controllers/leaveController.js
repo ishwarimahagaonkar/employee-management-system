@@ -69,6 +69,31 @@ exports.getMyLeaves = async (req, res) => {
 };
 
 /* =========================
+   GET ALL LEAVES (Admin)
+========================= */
+exports.getAllLeaves = async (req, res) => {
+    try {
+
+        const leaves = await Leave.find({})
+            .populate("userId", "fullName email department designation")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: leaves
+        });
+
+    } catch (error) {
+        console.error("Get All Leaves Error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Server Error"
+        });
+    }
+};
+
+/* =========================
    GET SINGLE LEAVE
 ========================= */
 exports.getLeaveById = async (req, res) => {

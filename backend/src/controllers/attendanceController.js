@@ -25,8 +25,8 @@ exports.punchIn = async (req, res) => {
     console.log("REQ USER:", req.user);
     console.log("REQ BODY:", req.body);
 
-    const { lat, lng, address } = req.body;
-    
+    const { lat, lng, address, photo } = req.body;
+
 
     // Create today's date string in Asia/Kolkata timezone (YYYY-MM-DD)
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -78,7 +78,8 @@ exports.punchIn = async (req, res) => {
         lng,
         address,
       },
-      
+      punchInPhoto: photo,
+
       status: attendanceStatus,
     });
 
@@ -106,7 +107,7 @@ exports.punchIn = async (req, res) => {
  */
 exports.punchOut = async (req, res) => {
   try {
-    const { lat, lng, address } = req.body;
+    const { lat, lng, address, photo } = req.body;
 
 
     // Verify employee location
@@ -136,7 +137,8 @@ exports.punchOut = async (req, res) => {
     // Store punch-out details
     attendance.punchOutTime = new Date();
     attendance.punchOutLocation = { lat, lng, address, };
-    
+    attendance.punchOutPhoto = photo;
+
 
     // Calculate total working hours
     const hours = calculateWorkingHours(

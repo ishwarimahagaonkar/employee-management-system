@@ -12,6 +12,7 @@ router.get("/:id", protect, leaveController.getLeaveById);
 router.delete("/:id", protect, leaveController.cancelLeave);
 
 // Admin
+router.get("/", protect, adminOnly, leaveController.getAllLeaves);
 router.patch("/:id/status",protect, adminOnly, leaveController.updateLeaveStatus);
 
 module.exports = router;

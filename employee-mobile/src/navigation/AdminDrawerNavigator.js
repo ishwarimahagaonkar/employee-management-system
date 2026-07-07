@@ -11,6 +11,7 @@ import AdminDashboard from "../screens/admin/AdminDashboard";
 import EmployeesScreen from "../screens/admin/Employees/EmployeesScreen";
 import AttendanceScreen from "../screens/admin/Attendance/AttendanceScreen";
 import TravelStackNavigator from "../screens/admin/Travel/TravelStackNavigator";
+import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
 import PlaceholderScreen from "../screens/admin/components/PlaceholderScreen";
 
 const Drawer = createDrawerNavigator();
@@ -99,11 +100,7 @@ export default function AdminDrawerNavigator() {
       <Drawer.Screen name="Employees" component={EmployeesScreen} />
       <Drawer.Screen name="Attendance" component={AttendanceScreen} />
       <Drawer.Screen name="Travel" component={TravelStackNavigator} />
-      <Drawer.Screen
-        name="Leave"
-        component={PlaceholderScreen}
-        initialParams={{ title: "Leave", icon: "calendar-outline" }}
-      />
+      <Drawer.Screen name="Leave" component={LeaveScreen} />
       <Drawer.Screen
         name="Payroll"
         component={PlaceholderScreen}

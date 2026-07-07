@@ -74,6 +74,18 @@ export default function TravelHistoryCard({ trip }) {
           <Text style={styles.addressValue}>{trip.endLocation.address}</Text>
         </View>
       )}
+
+      {!!trip.meetingDetails?.customerName && (
+        <View style={styles.meetingBox}>
+          <Text style={styles.meetingCustomer}>{trip.meetingDetails.customerName}</Text>
+          <Text style={styles.meetingTime}>
+            {trip.meetingDetails.meetingStartTime} - {trip.meetingDetails.meetingEndTime}
+          </Text>
+          {!!trip.meetingDetails.notes && (
+            <Text style={styles.meetingNotes}>{trip.meetingDetails.notes}</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -186,5 +198,30 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: "#374151",
+  },
+
+  meetingBox: {
+    marginTop: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+  },
+
+  meetingCustomer: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E1B4B",
+  },
+
+  meetingTime: {
+    fontSize: 12,
+    color: "#7C3AED",
+    marginTop: 2,
+  },
+
+  meetingNotes: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 6,
   },
 });

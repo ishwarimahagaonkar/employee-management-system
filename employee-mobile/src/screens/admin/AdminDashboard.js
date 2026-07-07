@@ -42,7 +42,11 @@ export default function AdminDashboard({ navigation }) {
           (a) => a.date === todayStr
         );
 
-        const present = todayRecords.filter((a) => a.status === "present").length;
+        // "approved" covers emergency requests an admin approved -- those
+        // employees did attend, just via override rather than the geofence check.
+        const present = todayRecords.filter(
+          (a) => a.status === "present" || a.status === "approved"
+        ).length;
         const late = todayRecords.filter((a) => a.status === "late").length;
         const absent = Math.max(total - present - late, 0);
 

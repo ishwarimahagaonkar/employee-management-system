@@ -78,11 +78,19 @@ export default function useTravel() {
     }
 
     const location = await Promise.race([
-      Location.getCurrentPositionAsync({}),
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Could not get your location. Please check your GPS/network signal and try again.")), 15000)
       ),
     ]);
+
+    // Reject readings too imprecise to trust for a distance calculation --
+    // a coarse network/WiFi-based fix can be off by several kilometers.
+    if (location.coords.accuracy != null && location.coords.accuracy > 100) {
+      throw new Error(
+        "Your location signal is too weak for accurate tracking. Move to an open area and try again."
+      );
+    }
     const { latitude, longitude } = location.coords;
 
     let address = "Address unavailable";
@@ -134,20 +142,23 @@ export default function useTravel() {
     }
   };
 
-  const endTrip = async () => {
+  const endTrip = async (meetingDetails, onSuccess) => {
     try {
       setBtnLoading(true);
 
       const token = await AsyncStorage.getItem("token");
       const loc = await getLocation();
 
-      await api.post("/travel/end", loc, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post(
+        "/travel/end",
+        { ...loc, ...meetingDetails },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       Alert.alert("Success", "Trip Ended");
       await fetchTravel();
       await fetchHistory();
+      onSuccess?.();
     } catch (err) {
       Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
     } finally {

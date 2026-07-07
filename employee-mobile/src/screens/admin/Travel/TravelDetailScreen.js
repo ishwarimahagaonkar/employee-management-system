@@ -94,6 +94,16 @@ export default function TravelDetailScreen({ route, navigation }) {
           <DetailRow label="From" value={trip?.startLocation?.address || "-"} />
           <DetailRow label="To" value={trip?.endLocation?.address || "-"} />
         </View>
+
+        {!!trip?.meetingDetails?.customerName && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Meeting Details</Text>
+            <DetailRow label="Customer" value={trip.meetingDetails.customerName} />
+            <DetailRow label="Start Time" value={trip.meetingDetails.meetingStartTime} />
+            <DetailRow label="End Time" value={trip.meetingDetails.meetingEndTime} />
+            <DetailRow label="Notes" value={trip.meetingDetails.notes} />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
