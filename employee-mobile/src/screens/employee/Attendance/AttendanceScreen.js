@@ -249,13 +249,14 @@ export default function AttendanceScreen() {
               <Ionicons name="location-outline" size={24} color="#fff" />
             </View>
             <View>
-              <Text style={styles.locationTitle}>Current Location</Text>
+              <Text style={styles.locationTitle}>Mark Attendance</Text>
               <Text style={styles.locationSubTitle}>Within Office Geofence</Text>
             </View>
           </View>
 
           {/* Camera Preview */}
           <View style={styles.mapPlaceholder}>
+            <Ionicons name="camera-outline" size={40} color="#ffffffb7" />
             {showCamera && (
               <CameraView
                 style={{ width: "100%", height: "100%" }}

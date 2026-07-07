@@ -33,9 +33,9 @@ function getTodayDate() {
 ========================= */
 exports.startTrip = async (req, res) => {
     try {
-        const userId = req.user.id; // 🔥 FROM TOKEN
+        const userId = req.user._id; // 🔥 FROM TOKEN
         const {purpose, lat, lng, address } = req.body;
-
+        
         const date = getTodayDate();
 
         let travel = await Travel.findOne({ userId, date });
@@ -59,6 +59,7 @@ exports.startTrip = async (req, res) => {
 
         travel.trips.push({
             purpose,
+            userId,
             startTime: new Date(),
             startLocation: { lat, lng, address },
             endTime: null,
@@ -89,7 +90,7 @@ exports.startTrip = async (req, res) => {
 ========================= */
 exports.endTrip = async (req, res) => {
     try {
-        const userId = req.user.id; // 🔥 FROM TOKEN
+        const userId = req.user._id; // 🔥 FROM TOKEN
         const { lat, lng, address } = req.body;
 
         const date = getTodayDate();
@@ -156,7 +157,7 @@ exports.endTrip = async (req, res) => {
 ========================= */
 exports.getTodayTravel = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user._id;
         const date = getTodayDate();
 
         const travel = await Travel.findOne({ userId, date });
@@ -191,13 +192,74 @@ exports.getTodayTravel = async (req, res) => {
 ========================= */
 exports.getTravelHistory = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user._id;
 
         const data = await Travel.find({ userId }).sort({ createdAt: -1 });
 
         res.json({
             success: true,
             data
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+/* =========================
+   GET ALL TRAVEL (ADMIN)
+========================= */
+exports.getAllTravel = async (req, res) => {
+    try {
+        const records = await Travel.find({})
+            .populate("userId", "fullName email department designation")
+            .sort({ date: -1 });
+
+        let totalDistanceKm = 0;
+        let activeTripsCount = 0;
+        let completedTripsCount = 0;
+
+        const trips = [];
+
+        records.forEach((record) => {
+            (record.trips || []).forEach((trip) => {
+                totalDistanceKm += trip.distanceKm || 0;
+
+                if (trip.endTime) {
+                    completedTripsCount += 1;
+                } else {
+                    activeTripsCount += 1;
+                }
+
+                trips.push({
+                    _id: trip._id,
+                    employee: record.userId,
+                    purpose: trip.purpose,
+                    date: record.date,
+                    startTime: trip.startTime,
+                    endTime: trip.endTime,
+                    startLocation: trip.startLocation,
+                    endLocation: trip.endLocation,
+                    distanceKm: trip.distanceKm,
+                    status: trip.endTime ? "completed" : "in-progress"
+                });
+            });
+        });
+
+        trips.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+        res.json({
+            success: true,
+            data: {
+                totalDistanceKm: Number(totalDistanceKm.toFixed(2)),
+                activeTripsCount,
+                completedTripsCount,
+                trips
+            }
         });
 
     } catch (error) {
