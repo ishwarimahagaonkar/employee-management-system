@@ -7,10 +7,10 @@ const bcrypt = require("bcryptjs");
 // ==========================
 exports.createEmployee = async (req, res) => {
     try {
-        const { fullName, email, password, department, designation } = req.body;
+        const { id, fullName, email, password, department, designation } = req.body;
 
         // Validation
-        if (!fullName || !email || !password || !department || !designation) {
+        if (!id || !fullName || !email || !password || !department || !designation) {
             return res.status(400).json({
                 message: "All fields are required",
             });
@@ -32,6 +32,7 @@ exports.createEmployee = async (req, res) => {
 
         // Create employee
         const employee = await User.create({
+            id,
             fullName,
             email: normalizedEmail,
             password: hashedPassword,

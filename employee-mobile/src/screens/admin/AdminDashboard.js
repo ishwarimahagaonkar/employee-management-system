@@ -1,87 +1,111 @@
-import React from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-export default function AdminDashboard() {
+import { AuthContext } from "../../context/AuthContext";
+import api from "../../api/api.js";
+
+const QUICK_ACTIONS = [
+  { route: "Employees", label: "Manage Employees", icon: "people-outline" },
+  { route: "Attendance", label: "Attendance Records", icon: "time-outline" },
+  { route: "Payroll", label: "Salary Management", icon: "cash-outline" },
+  { route: "Report", label: "Generate Reports", icon: "document-text-outline" },
+];
+
+const getTodayStr = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+export default function AdminDashboard({ navigation }) {
+  const { user } = useContext(AuthContext);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, late: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [employeesRes, attendanceRes] = await Promise.all([
+          api.get("/employees"),
+          api.get("/attendance"),
+        ]);
+
+        const total = employeesRes.data?.count || 0;
+        const todayStr = getTodayStr();
+        const todayRecords = (attendanceRes.data?.attendance || []).filter(
+          (a) => a.date === todayStr
+        );
+
+        const present = todayRecords.filter((a) => a.status === "present").length;
+        const late = todayRecords.filter((a) => a.status === "late").length;
+        const absent = Math.max(total - present - late, 0);
+
+        setStats({ total, present, absent, late });
+      } catch (err) {
+        console.log("Admin stats error:", err.response?.data || err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.welcome}>Welcome Admin 👋</Text>
-        <Text style={styles.subtitle}>
-          Employee Management Dashboard
-        </Text>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Employees</Text>
-            <Text style={styles.cardValue}>25</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Present</Text>
-            <Text style={styles.cardValue}>20</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Absent</Text>
-            <Text style={styles.cardValue}>5</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Late</Text>
-            <Text style={styles.cardValue}>2</Text>
-          </View>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.openDrawer()}>
+            <Ionicons name="menu" size={24} color="#1E1B4B" />
+          </TouchableOpacity>
+          <Text style={styles.welcome}>Welcome, {user?.fullName || "Admin"} !!!</Text>
         </View>
+        <Text style={styles.subtitle}>Dashboard</Text>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        ) : (
+          <View style={styles.statsContainer}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Employees</Text>
+              <Text style={styles.cardValue}>{stats.total}</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Present</Text>
+              <Text style={[styles.cardValue, { color: "#16A34A" }]}>{stats.present}</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Absent</Text>
+              <Text style={[styles.cardValue, { color: "#EF4444" }]}>{stats.absent}</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Late</Text>
+              <Text style={[styles.cardValue, { color: "#D97706" }]}>{stats.late}</Text>
+            </View>
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>
-            👥 Manage Employees
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>
-            📅 Attendance Records
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>
-            💰 Salary Management
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>
-            📄 Generate Reports
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.todayCard}>
-          <Text style={styles.todayTitle}>
-            Today's Summary
-          </Text>
-
-          <Text style={styles.todayText}>
-            Total Working Employees: 20
-          </Text>
-
-          <Text style={styles.todayText}>
-            Employees Yet to Punch In: 3
-          </Text>
-
-          <Text style={styles.todayText}>
-            Employees Outside Office: 1
-          </Text>
-        </View>
+        {QUICK_ACTIONS.map((action) => (
+          <TouchableOpacity
+            key={action.route}
+            style={styles.actionButton}
+            onPress={() => navigation.navigate(action.route)}
+          >
+            <Ionicons name={action.icon} size={18} color="#483bbc" style={{ marginRight: 10 }} />
+            <Text style={styles.actionText}>{action.label}</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -93,17 +117,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
 
-  welcome: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginTop: 20,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
     marginHorizontal: 20,
+  },
+
+  welcome: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginLeft: 14,
   },
 
   subtitle: {
     color: "#64748B",
     marginHorizontal: 20,
-    marginTop: 5,
+    marginTop: 6,
+    marginBottom: 20,
+  },
+
+  loader: {
+    marginTop: 20,
     marginBottom: 20,
   },
 
@@ -132,7 +167,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     marginTop: 10,
-    color: "#2563EB",
+    color: "#6D5DF6",
   },
 
   sectionTitle: {
@@ -144,7 +179,9 @@ const styles = StyleSheet.create({
   },
 
   actionButton: {
-    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#6c5df66d",
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 18,
@@ -152,27 +189,8 @@ const styles = StyleSheet.create({
   },
 
   actionText: {
-    color: "#FFFFFF",
+    color: "#483bbc",
     fontWeight: "600",
     fontSize: 16,
-  },
-
-  todayCard: {
-    backgroundColor: "#FFFFFF",
-    margin: 20,
-    padding: 20,
-    borderRadius: 16,
-    elevation: 3,
-  },
-
-  todayTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 15,
-  },
-
-  todayText: {
-    marginBottom: 8,
-    color: "#334155",
   },
 });

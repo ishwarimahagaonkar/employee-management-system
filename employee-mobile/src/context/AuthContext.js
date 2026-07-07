@@ -1,5 +1,6 @@
 import React, { createContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../api/api.js";
 
 export const AuthContext = createContext();
 
@@ -17,7 +18,15 @@ export const AuthProvider = ({ children }) => {
       const storedToken = await AsyncStorage.getItem("token");
       const storedUser = await AsyncStorage.getItem("user");
       setToken(storedToken);
-      setUser(storedUser ? JSON.parse(storedUser) : null);
+
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      } else if (storedToken) {
+        // Older sessions logged in before user data was cached locally.
+        const res = await api.get("/employees/me");
+        await AsyncStorage.setItem("user", JSON.stringify(res.data));
+        setUser(res.data);
+      }
     } catch (error) {
       console.log(error);
     } finally {

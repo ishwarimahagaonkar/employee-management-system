@@ -20,6 +20,7 @@ import { CameraView, Camera } from "expo-camera";   // ✅ Correct imports
 import api from "../../../api/api.js";
 import AttendanceCard from "./AttendanceCard.js";
 import MonthlyAttendance from "./MonthlyAttendance.js";
+import EmergencyRequestModal from "./EmergencyRequestModal.js";
 
 export default function AttendanceScreen() {
   const [todayAttendance, setTodayAttendance] = useState(null);
@@ -29,6 +30,10 @@ export default function AttendanceScreen() {
   const [cameraPermission, setCameraPermission] = useState(null);
   const [locationPermission, setLocationPermission] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
+  const [emergencyType, setEmergencyType] = useState(null);
+  const [pendingLocation, setPendingLocation] = useState(null);
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
   const cameraRef = useRef(null);   // ✅ Proper ref
   const navigation = useNavigation();
 
@@ -95,6 +100,8 @@ export default function AttendanceScreen() {
   }, []);
 
   const handlePunch = async (type) => {
+    let capturedLocation = null;
+
     try {
       setShowCamera(true);
 
@@ -178,15 +185,19 @@ export default function AttendanceScreen() {
         console.log("Reverse geocode failed:", err.message);
       }
 
+      capturedLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        address: readableAddress,
+      };
+
       // Send to backend
       const token = await AsyncStorage.getItem("token");
       const res = await api.post(
         `/attendance/${type}`,
         {
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
+          ...capturedLocation,
           photo: photo ? photo.base64 : null,
-          address: readableAddress,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -194,10 +205,36 @@ export default function AttendanceScreen() {
       alert(res.data.message);
       await fetchAttendanceData();
     } catch (err) {
-      alert(err.response?.data?.message || `${type} failed`);
+      if (err.response?.data?.outsideLocation && capturedLocation) {
+        setEmergencyType(type);
+        setPendingLocation(capturedLocation);
+        setEmergencyModalVisible(true);
+      } else {
+        alert(err.response?.data?.message || `${type} failed`);
+      }
       console.log(err.response?.data || err.message);
     }
     console.log("hasPunchedOut:", hasPunchedOut, typeof hasPunchedOut);
+  };
+
+  const submitEmergencyRequest = async (reason) => {
+    try {
+      setEmergencyLoading(true);
+      const token = await AsyncStorage.getItem("token");
+      const res = await api.post(
+        "/attendance/emergency-request",
+        { type: emergencyType, reason, ...pendingLocation },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert(res.data.message);
+      setEmergencyModalVisible(false);
+      await fetchAttendanceData();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to send request");
+    } finally {
+      setEmergencyLoading(false);
+    }
   };
 
   return (
@@ -317,6 +354,14 @@ export default function AttendanceScreen() {
       )}
 
       <View style={{ height: 100 }} />
+
+      <EmergencyRequestModal
+        visible={emergencyModalVisible}
+        type={emergencyType}
+        loading={emergencyLoading}
+        onClose={() => setEmergencyModalVisible(false)}
+        onSubmit={submitEmergencyRequest}
+      />
     </ScrollView>
   );
 }

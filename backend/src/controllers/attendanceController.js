@@ -55,7 +55,8 @@ exports.punchIn = async (req, res) => {
 
     if (!allowed) {
       return res.status(403).json({
-        message: "You are outside office location. Punch In denied.",
+        message: "You are outside office location. You can request permission from your admin.",
+        outsideLocation: true,
       });
     }
 
@@ -113,7 +114,8 @@ exports.punchOut = async (req, res) => {
 
     if (!allowed) {
       return res.status(403).json({
-        message: "Punch Out denied: You are outside office location",
+        message: "You are outside office location. You can request permission from your admin.",
+        outsideLocation: true,
       });
     }
 
@@ -166,7 +168,7 @@ exports.punchOut = async (req, res) => {
  */
 exports.requestEmergency = async (req, res) => {
   try {
-    const { reason, type } = req.body;
+    const { reason, type, lat, lng, address } = req.body;
 
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
@@ -175,16 +177,33 @@ exports.requestEmergency = async (req, res) => {
       date: todayStr,
     });
 
-    // Create emergency attendance request
-    if (!attendance && type === "punchIn") {
+    if (type === "punch-in") {
+      if (attendance) {
+        return res.status(400).json({
+          message: "Already punched in today",
+        });
+      }
+
       attendance = await Attendance.create({
         userId: req.user._id,
         date: todayStr,
+        punchInTime: new Date(),
+        punchInLocation: { lat, lng, address },
+        isOutsideLocation: true,
         emergencyRequest: true,
         emergencyReason: reason,
         status: "pending",
       });
     } else {
+      if (!attendance) {
+        return res.status(404).json({
+          message: "No punch in found for today",
+        });
+      }
+
+      attendance.punchOutTime = new Date();
+      attendance.punchOutLocation = { lat, lng, address };
+      attendance.isOutsideLocation = true;
       attendance.emergencyRequest = true;
       attendance.emergencyReason = reason;
       attendance.status = "pending";
@@ -193,7 +212,7 @@ exports.requestEmergency = async (req, res) => {
     }
 
     res.json({
-      message: "Emergency request sent to admin",
+      message: "Request sent to admin for approval",
       attendance,
     });
   } catch (err) {
@@ -241,15 +260,14 @@ exports.approveEmergency = async (req, res) => {
 
 
 /**
- * @desc Get Complete Attendance History
- * @route GET /attendance/user
- * @access Private
+ * @desc Get Complete Attendance History (all employees)
+ * @route GET /attendance
+ * @access Admin
  */
 exports.getAttendanceByUser = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    const attendance = await Attendance.find({ userId })
+    const attendance = await Attendance.find({})
+      .populate("userId", "fullName email department designation")
       .sort({ punchInTime: -1 });
 
     res.json({
