@@ -91,7 +91,14 @@ exports.startTrip = async (req, res) => {
 exports.endTrip = async (req, res) => {
     try {
         const userId = req.user._id; // 🔥 FROM TOKEN
-        const { lat, lng, address } = req.body;
+        const { lat, lng, address, customerName, meetingStartTime, meetingEndTime, notes } = req.body;
+
+        if (!customerName || !meetingStartTime || !meetingEndTime || !notes) {
+            return res.status(400).json({
+                success: false,
+                message: "Meeting details (customer name, start time, end time, notes) are required to end a trip"
+            });
+        }
 
         const date = getTodayDate();
 
@@ -128,6 +135,7 @@ exports.endTrip = async (req, res) => {
         lastTrip.durationMin = Math.round(
             (endTime - lastTrip.startTime) / 60000
         );
+        lastTrip.meetingDetails = { customerName, meetingStartTime, meetingEndTime, notes };
 
         travel.totalTrips = travel.trips.length;
         travel.totalDistanceKm = travel.trips.reduce(
@@ -245,6 +253,7 @@ exports.getAllTravel = async (req, res) => {
                     startLocation: trip.startLocation,
                     endLocation: trip.endLocation,
                     distanceKm: trip.distanceKm,
+                    meetingDetails: trip.meetingDetails,
                     status: trip.endTime ? "completed" : "in-progress"
                 });
             });

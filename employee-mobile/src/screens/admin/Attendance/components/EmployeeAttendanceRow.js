@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 const STATUS_STYLE = {
   present: { bg: "#DCFCE7", text: "#16A34A", label: "Present" },
@@ -25,16 +26,23 @@ const formatTime = (isoDate) => {
   });
 };
 
-export default function EmployeeAttendanceRow({ employee, record }) {
+export default function EmployeeAttendanceRow({ employee, record, onPress }) {
   const status = !record
+    ? "absent"
+    : record.status === "rejected"
     ? "absent"
     : ["late", "pending"].includes(record.status)
     ? record.status
-    : "present";
+    : "present"; // covers "present" and emergency-"approved" records
   const style = STATUS_STYLE[status];
+  const hasPhoto = !!(record?.punchInPhoto || record?.punchOutPhoto);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => record && onPress?.(employee, record)}
+      activeOpacity={record ? 0.7 : 1}
+    >
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{initials(employee.fullName)}</Text>
       </View>
@@ -47,12 +55,15 @@ export default function EmployeeAttendanceRow({ employee, record }) {
       </View>
 
       <View style={styles.right}>
-        <View style={[styles.statusPill, { backgroundColor: style.bg }]}>
-          <Text style={[styles.statusText, { color: style.text }]}>{style.label}</Text>
+        <View style={styles.pillRow}>
+          {hasPhoto && <Ionicons name="camera" size={14} color="#9CA3AF" style={styles.cameraIcon} />}
+          <View style={[styles.statusPill, { backgroundColor: style.bg }]}>
+            <Text style={[styles.statusText, { color: style.text }]}>{style.label}</Text>
+          </View>
         </View>
         <Text style={styles.time}>{formatTime(record?.punchInTime)}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -105,6 +116,15 @@ const styles = StyleSheet.create({
 
   right: {
     alignItems: "flex-end",
+  },
+
+  pillRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  cameraIcon: {
+    marginRight: 6,
   },
 
   statusPill: {

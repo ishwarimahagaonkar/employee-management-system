@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../../api/api.js";
 import EmployeeAttendanceRow from "./components/EmployeeAttendanceRow";
 import EmergencyRequestCard from "./components/EmergencyRequestCard";
+import AttendancePhotoModal from "./components/AttendancePhotoModal";
 
 const getTodayStr = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -24,6 +25,9 @@ export default function AttendanceScreen({ navigation }) {
   const [employees, setEmployees] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [tab, setTab] = useState("today");
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -51,7 +55,11 @@ export default function AttendanceScreen({ navigation }) {
     (a) => a.emergencyRequest && a.status === "pending"
   );
 
-  const presentCount = todayRecords.filter((a) => a.status === "present").length;
+  // "approved" covers emergency requests an admin approved -- those
+  // employees did attend, just via override rather than the geofence check.
+  const presentCount = todayRecords.filter(
+    (a) => a.status === "present" || a.status === "approved"
+  ).length;
   const lateCount = todayRecords.filter((a) => a.status === "late").length;
   const pendingCount = todayRecords.filter((a) => a.status === "pending").length;
   const absentCount = Math.max(employees.length - presentCount - lateCount - pendingCount, 0);
@@ -63,6 +71,12 @@ export default function AttendanceScreen({ navigation }) {
     } catch (err) {
       Alert.alert("Error", "Failed to update request");
     }
+  };
+
+  const handleRowPress = (employee, record) => {
+    setSelectedEmployee(employee);
+    setSelectedRecord(record);
+    setPhotoModalVisible(true);
   };
 
   const handleApprove = (record) => resolveEmergency(record, "approve");
@@ -136,6 +150,7 @@ export default function AttendanceScreen({ navigation }) {
             <EmployeeAttendanceRow
               employee={item}
               record={todayRecords.find((a) => a.userId?._id === item._id)}
+              onPress={handleRowPress}
             />
           )}
         />
@@ -151,6 +166,13 @@ export default function AttendanceScreen({ navigation }) {
           )}
         />
       )}
+
+      <AttendancePhotoModal
+        visible={photoModalVisible}
+        employee={selectedEmployee}
+        record={selectedRecord}
+        onClose={() => setPhotoModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

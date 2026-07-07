@@ -4,6 +4,7 @@ import { ScrollView, ActivityIndicator, View, Text, StyleSheet } from "react-nat
 import TravelHeader from "./components/TravelHeader";
 import TravelSummaryCard from "./components/TravelSummaryCard";
 import TravelHistoryCard from "./components/TravelHistoryCard";
+import MeetingDetailsModal from "./components/MeetingDetailsModal";
 import useTravel from "./hooks/useTravel";
 
 export default function TravelScreen() {
@@ -20,6 +21,7 @@ export default function TravelScreen() {
   } = useTravel();
 
   const [purpose, setPurpose] = useState("");
+  const [meetingModalVisible, setMeetingModalVisible] = useState(false);
 
   if (loading) {
     return (
@@ -38,7 +40,7 @@ export default function TravelScreen() {
         setPurpose={setPurpose}
         btnLoading={btnLoading}
         onStart={() => startTrip(purpose, () => setPurpose(""))}
-        onEnd={endTrip}
+        onEnd={() => setMeetingModalVisible(true)}
       />
 
       <TravelSummaryCard
@@ -59,6 +61,13 @@ export default function TravelScreen() {
           ))
         )}
       </View>
+
+      <MeetingDetailsModal
+        visible={meetingModalVisible}
+        loading={btnLoading}
+        onClose={() => setMeetingModalVisible(false)}
+        onSubmit={(details) => endTrip(details, () => setMeetingModalVisible(false))}
+      />
     </ScrollView>
   );
 }

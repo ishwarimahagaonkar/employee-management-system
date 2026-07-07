@@ -38,6 +38,13 @@ const travelSchema = new mongoose.Schema({
             durationMin: {
                 type: Number,
                 default: 0
+            },
+
+            meetingDetails: {
+                customerName: String,
+                meetingStartTime: String,
+                meetingEndTime: String,
+                notes: String
             }
         }
     ],

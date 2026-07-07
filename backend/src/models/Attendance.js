@@ -27,6 +27,9 @@ const attendanceSchema = new mongoose.Schema({
         address: String
     },
 
+    punchInPhoto: String,
+    punchOutPhoto: String,
+
     isOutsideLocation: {
         type: Boolean,
         default: false

@@ -52,6 +52,12 @@ export default function TravelHistoryListCard({ trip, onPress }) {
 
         <Text style={styles.purpose} numberOfLines={1}>{trip.purpose}</Text>
 
+        {!!trip.meetingDetails?.customerName && (
+          <Text style={styles.customer} numberOfLines={1}>
+            Met with {trip.meetingDetails.customerName}
+          </Text>
+        )}
+
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>{formatDate(trip.date)}</Text>
           <Text style={styles.metaDot}>•</Text>
@@ -121,6 +127,12 @@ const styles = StyleSheet.create({
   purpose: {
     fontSize: 13,
     color: "#6B7280",
+    marginTop: 2,
+  },
+
+  customer: {
+    fontSize: 12,
+    color: "#7C3AED",
     marginTop: 2,
   },
 
