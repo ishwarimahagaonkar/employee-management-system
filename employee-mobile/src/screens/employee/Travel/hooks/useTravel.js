@@ -72,10 +72,17 @@ export default function useTravel() {
     }
 
     if (!granted) {
-      throw new Error("Location permission is required to track travel");
+      throw new Error(
+        "Location permission is required to track travel. Please enable it for this app in your device Settings."
+      );
     }
 
-    const location = await Location.getCurrentPositionAsync({});
+    const location = await Promise.race([
+      Location.getCurrentPositionAsync({}),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Could not get your location. Please check your GPS/network signal and try again.")), 15000)
+      ),
+    ]);
     const { latitude, longitude } = location.coords;
 
     let address = "Address unavailable";
