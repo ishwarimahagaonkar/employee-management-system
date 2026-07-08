@@ -71,6 +71,11 @@ const attendanceSchema = new mongoose.Schema({
     overtimeHours: {
         type: Number,
         default: 0
+    },
+
+    isHalfDay: {
+        type: Boolean,
+        default: false
     }
 
 });

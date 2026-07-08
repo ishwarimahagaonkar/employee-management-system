@@ -1,4 +1,3 @@
-const { officeLocation } = require("../config/location");
 // Haversine formula
 // utils/distance.js
 
@@ -24,17 +23,12 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   return R * c; // meters
 };
 
-const isWithinOffice = (lat, lng) => {
+const isWithinOffice = (lat, lng, officeLat, officeLng, radius) => {
   if (!lat || !lng) return false;
 
-  const distance = getDistance(
-    lat,
-    lng,
-    officeLocation.lat,
-    officeLocation.lng
-  );
+  const distance = getDistance(lat, lng, officeLat, officeLng);
 
-  return distance <= officeLocation.radius;
+  return distance <= radius;
 };
 
 module.exports = { getDistance, isWithinOffice };

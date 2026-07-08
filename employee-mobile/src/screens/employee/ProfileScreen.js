@@ -105,7 +105,7 @@ export default function ProfileScreen({navigation}) {
         <Text style={styles.cardTitle}>
           Personal Information
         </Text>
-        <InfoRow icon="person-outline" label="Employee ID" value={profile?._id} />
+        <InfoRow icon="person-outline" label="Employee ID" value={profile?.empID} />
         <InfoRow icon="mail-outline" label="Email" value={profile?.email} />
         <InfoRow icon="business-outline" label="Department" value={profile?.department} />
         <InfoRow icon="calendar-outline" label="Joining Date" value={formatDate(profile?.createdAt)} />     

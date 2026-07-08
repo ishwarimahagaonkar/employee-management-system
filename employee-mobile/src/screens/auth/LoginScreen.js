@@ -92,9 +92,9 @@ const handleLogin = async () => {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.footer}>
+      {/* <Text style={styles.footer}>
         @2026 Obsidian.dev • all rights reserved.
-      </Text>
+      </Text> */}
     </SafeAreaView>
   );
 }

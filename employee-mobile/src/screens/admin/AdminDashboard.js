@@ -16,7 +16,6 @@ import api from "../../api/api.js";
 const QUICK_ACTIONS = [
   { route: "Employees", label: "Manage Employees", icon: "people-outline" },
   { route: "Attendance", label: "Attendance Records", icon: "time-outline" },
-  { route: "Payroll", label: "Salary Management", icon: "cash-outline" },
   { route: "Report", label: "Generate Reports", icon: "document-text-outline" },
 ];
 

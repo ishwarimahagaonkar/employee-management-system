@@ -54,7 +54,7 @@ export default function TravelHistoryListCard({ trip, onPress }) {
 
         {!!trip.meetingDetails?.customerName && (
           <Text style={styles.customer} numberOfLines={1}>
-            Met with {trip.meetingDetails.customerName}
+            Customer : {trip.meetingDetails.customerName}
           </Text>
         )}
 
