@@ -12,7 +12,8 @@ import EmployeesScreen from "../screens/admin/Employees/EmployeesScreen";
 import AttendanceScreen from "../screens/admin/Attendance/AttendanceScreen";
 import TravelStackNavigator from "../screens/admin/Travel/TravelStackNavigator";
 import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
-import PlaceholderScreen from "../screens/admin/components/PlaceholderScreen";
+import ReportScreen from "../screens/admin/Report/ReportScreen";
+import SettingsScreen from "../screens/admin/Settings/SettingsScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -22,7 +23,6 @@ const NAV_ITEMS = [
   { name: "Attendance", label: "Attendance", icon: "time-outline" },
   { name: "Travel", label: "Travel", icon: "location-outline" },
   { name: "Leave", label: "Leave", icon: "calendar-outline" },
-  { name: "Payroll", label: "Payroll", icon: "cash-outline" },
   { name: "Report", label: "Report", icon: "document-text-outline" },
   { name: "Settings", label: "Settings", icon: "settings-outline" },
 ];
@@ -101,21 +101,8 @@ export default function AdminDrawerNavigator() {
       <Drawer.Screen name="Attendance" component={AttendanceScreen} />
       <Drawer.Screen name="Travel" component={TravelStackNavigator} />
       <Drawer.Screen name="Leave" component={LeaveScreen} />
-      <Drawer.Screen
-        name="Payroll"
-        component={PlaceholderScreen}
-        initialParams={{ title: "Payroll", icon: "cash-outline" }}
-      />
-      <Drawer.Screen
-        name="Report"
-        component={PlaceholderScreen}
-        initialParams={{ title: "Report", icon: "document-text-outline" }}
-      />
-      <Drawer.Screen
-        name="Settings"
-        component={PlaceholderScreen}
-        initialParams={{ title: "Settings", icon: "settings-outline" }}
-      />
+      <Drawer.Screen name="Report" component={ReportScreen} />
+      <Drawer.Screen name="Settings" component={SettingsScreen} />
     </Drawer.Navigator>
   );
 }

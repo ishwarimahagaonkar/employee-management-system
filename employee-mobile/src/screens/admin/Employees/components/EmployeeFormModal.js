@@ -2,7 +2,16 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-const emptyForm = { empID: "", fullName: "", email: "", password: "", department: "", designation: "", JoiningDate: "" };
+const emptyForm = {
+  empID: "",
+  fullName: "",
+  email: "",
+  password: "",
+  department: "",
+  designation: "",
+  JoiningDate: "",
+  role: "employee",
+};
 
 export default function EmployeeFormModal({ visible, employee, onClose, onSubmit }) {
   const [form, setForm] = useState(emptyForm);
@@ -78,6 +87,26 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry
                 />
+
+                <Text style={styles.label}>Role</Text>
+                <View style={styles.roleRow}>
+                  <TouchableOpacity
+                    style={[styles.roleBtn, form.role === "employee" && styles.roleBtnActive]}
+                    onPress={() => update("role")("employee")}
+                  >
+                    <Text style={[styles.roleBtnText, form.role === "employee" && styles.roleBtnTextActive]}>
+                      Employee
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.roleBtn, form.role === "admin" && styles.roleBtnActive]}
+                    onPress={() => update("role")("admin")}
+                  >
+                    <Text style={[styles.roleBtnText, form.role === "admin" && styles.roleBtnTextActive]}>
+                      Admin
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -162,6 +191,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1E1B4B",
     marginBottom: 16,
+  },
+
+  roleRow: {
+    flexDirection: "row",
+    marginBottom: 16,
+    gap: 10,
+  },
+
+  roleBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+  },
+
+  roleBtnActive: {
+    backgroundColor: "#EEECFF",
+    borderColor: "#6D5DF6",
+  },
+
+  roleBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+
+  roleBtnTextActive: {
+    color: "#6D5DF6",
   },
 
   submitBtn: {

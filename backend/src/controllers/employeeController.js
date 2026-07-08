@@ -7,12 +7,18 @@ const bcrypt = require("bcryptjs");
 // ==========================
 exports.createEmployee = async (req, res) => {
     try {
-        const { id, fullName, email, password, department, designation } = req.body;
+        const { empID, fullName, email, password, department, designation, role } = req.body;
 
         // Validation
-        if (!id || !fullName || !email || !password || !department || !designation) {
+        if (!empID || !fullName || !email || !password || !department || !designation) {
             return res.status(400).json({
                 message: "All fields are required",
+            });
+        }
+
+        if (role && !["employee", "admin"].includes(role)) {
+            return res.status(400).json({
+                message: "Role must be either 'employee' or 'admin'",
             });
         }
 
@@ -32,11 +38,11 @@ exports.createEmployee = async (req, res) => {
 
         // Create employee
         const employee = await User.create({
-            id,
+            empID,
             fullName,
             email: normalizedEmail,
             password: hashedPassword,
-            role: "employee",
+            role: role || "employee",
             department,
             designation,
         });

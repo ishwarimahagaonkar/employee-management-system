@@ -1,12 +1,24 @@
 // Attendance Model
 const Attendance = require("../models/Attendance");
+const Settings = require("../models/Settings");
 
 // Utility functions
 const { isWithinOffice } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
 
-// Company office coordinates
-const { COMPANY_LOCATION } = require("../config/location");
+const getOrgSettings = async () => {
+  let settings = await Settings.findOne();
+  if (!settings) {
+    settings = await Settings.create({});
+  }
+  return settings;
+};
+
+// Parses "HH:MM" into total minutes since midnight
+const parseTimeToMinutes = (hhmm) => {
+  const [hours, minutes] = (hhmm || "09:00").split(":").map(Number);
+  return hours * 60 + minutes;
+};
 
 
 /**
@@ -27,6 +39,7 @@ exports.punchIn = async (req, res) => {
 
     const { lat, lng, address, photo } = req.body;
 
+    const settings = await getOrgSettings();
 
     // Create today's date string in Asia/Kolkata timezone (YYYY-MM-DD)
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -50,8 +63,10 @@ exports.punchIn = async (req, res) => {
       });
     }
 
-    // Verify employee is within office premises
-    const allowed = isWithinOffice(lat, lng);
+    // Verify employee is within office premises (unless GPS enforcement is off)
+    const allowed = settings.enforceGps
+      ? isWithinOffice(lat, lng, settings.officeLat, settings.officeLng, settings.geofenceRadius)
+      : true;
 
     if (!allowed) {
       return res.status(403).json({
@@ -62,11 +77,11 @@ exports.punchIn = async (req, res) => {
 
     const now = new Date();
 
-    // Attendance is marked late after 9:30 AM in Asia/Kolkata timezone
+    // Attendance is marked late past (work start time + late threshold), in Asia/Kolkata timezone
     const nowInKolkata = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const hours = nowInKolkata.getHours();
-    const minutes = nowInKolkata.getMinutes();
-    const attendanceStatus = (hours > 9 || (hours === 9 && minutes > 30)) ? "late" : "present";
+    const minutesSinceMidnight = nowInKolkata.getHours() * 60 + nowInKolkata.getMinutes();
+    const lateThresholdMinutes = parseTimeToMinutes(settings.workStartTime) + settings.lateThresholdMinutes;
+    const attendanceStatus = minutesSinceMidnight > lateThresholdMinutes ? "late" : "present";
 
     // Create attendance record
     const attendance = await Attendance.create({
@@ -109,9 +124,12 @@ exports.punchOut = async (req, res) => {
   try {
     const { lat, lng, address, photo } = req.body;
 
+    const settings = await getOrgSettings();
 
-    // Verify employee location
-    const allowed = isWithinOffice(lat, lng);
+    // Verify employee location (unless GPS enforcement is off)
+    const allowed = settings.enforceGps
+      ? isWithinOffice(lat, lng, settings.officeLat, settings.officeLng, settings.geofenceRadius)
+      : true;
 
     if (!allowed) {
       return res.status(403).json({
@@ -147,6 +165,7 @@ exports.punchOut = async (req, res) => {
     );
 
     attendance.workingHours = hours;
+    attendance.isHalfDay = hours < settings.halfDayHours;
 
     await attendance.save();
 

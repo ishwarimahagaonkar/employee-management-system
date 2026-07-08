@@ -20,6 +20,8 @@ const travelRoutes = require("./src/routes/travelRoutes")
 
 const leaveRoutes = require("./src/routes/leaveRoutes");
 
+const settingsRoutes = require("./src/routes/settingsRoutes");
+
 dotenv.config();
 
 connectDB();
@@ -49,6 +51,8 @@ app.use("/api/salary-slip", salarySlipRoutes);
 app.use("/api/travel",travelRoutes)
 
 app.use("/api/leave", leaveRoutes);
+
+app.use("/api/settings", settingsRoutes);
 
 
 const PORT = process.env.PORT || 5000;
