@@ -3,7 +3,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API = axios.create({
-  baseURL: "https://employee-management-system-onj9.onrender.com",
+  baseURL: "https://employee-management-system-onj9.onrender.com/api",
 });
 
 // AUTO attach token
