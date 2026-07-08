@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "f8e38dce-bf74-4651-981d-49bc63043588"
+      }
+    },
+    "android": {
+      "package": "com.ishwarimahagaonkar.employeemanagementsystem"
+    }
+  }
+}
