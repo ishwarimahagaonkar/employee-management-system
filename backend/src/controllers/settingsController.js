@@ -53,7 +53,6 @@ exports.updateSettings = async (req, res) => {
             "enforceGps",
             "workStartTime",
             "workEndTime",
-            "lateThresholdMinutes",
             "halfDayHours",
         ];
 

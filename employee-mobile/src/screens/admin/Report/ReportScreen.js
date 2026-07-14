@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import api from "../../../api/api.js";
-import MonthSelector from "./components/MonthSelector";
+import DaySelector from "./components/DaySelector";
 import EmployeeReportCard from "./components/EmployeeReportCard";
 
 const EXTRA_HOURS_THRESHOLD_MIN = 17 * 60 + 30; // 5:30 PM
@@ -24,12 +24,17 @@ const extraHoursFor = (punchOutTime) => {
   return extraMinutes > 0 ? extraMinutes / 60 : 0;
 };
 
-const pad2 = (n) => String(n).padStart(2, "0");
+// Asia/Kolkata calendar date ("YYYY-MM-DD") for a given ISO timestamp,
+// matching the format the backend stores date/startDate/endDate in.
+const toISTDateStr = (isoString) => {
+  if (!isoString) return null;
+  return new Date(isoString).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+};
+
+const todayIST = () => toISTDateStr(new Date());
 
 export default function ReportScreen({ navigation }) {
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [selectedDate, setSelectedDate] = useState(todayIST());
 
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -62,54 +67,52 @@ export default function ReportScreen({ navigation }) {
     fetchData();
   }, []);
 
-  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
-  const monthPrefix = `${year}-${pad2(month)}`;
+  const isToday = selectedDate === todayIST();
 
-  const handlePrev = () => {
-    if (month === 1) {
-      setMonth(12);
-      setYear((y) => y - 1);
-    } else {
-      setMonth((m) => m - 1);
-    }
+  const shiftDate = (days) => {
+    const next = new Date(`${selectedDate}T00:00:00`);
+    next.setDate(next.getDate() + days);
+    setSelectedDate(toISTDateStr(next));
   };
 
+  const handlePrev = () => shiftDate(-1);
   const handleNext = () => {
-    if (isCurrentMonth) return;
-    if (month === 12) {
-      setMonth(1);
-      setYear((y) => y + 1);
-    } else {
-      setMonth((m) => m + 1);
-    }
+    if (isToday) return;
+    shiftDate(1);
   };
 
-  const reportRows = employees.map((employee) => {
-    const extraHours = attendance
-      .filter((a) => a.userId?._id === employee._id && a.date?.startsWith(monthPrefix) && a.punchOutTime)
-      .reduce((sum, a) => sum + extraHoursFor(a.punchOutTime), 0);
+  // Employees who joined (account created) after the selected day weren't
+  // employed yet, so they shouldn't show up in that day's report.
+  const reportRows = employees
+    .filter((employee) => !employee.createdAt || toISTDateStr(employee.createdAt) <= selectedDate)
+    .map((employee) => {
+      const extraHours = attendance
+        .filter((a) => a.userId?._id === employee._id && a.date === selectedDate && a.punchOutTime)
+        .reduce((sum, a) => sum + extraHoursFor(a.punchOutTime), 0);
 
-    const unpaidLeaveDays = leaves
-      .filter(
+      // A day counts as unpaid leave if it falls within an approved unpaid
+      // leave's date range (startDate/endDate are inclusive "YYYY-MM-DD" strings).
+      const unpaidLeaveDays = leaves.some(
         (l) =>
           l.userId?._id === employee._id &&
           l.leaveType === "Unpaid" &&
           l.status === "Approved" &&
-          l.startDate?.startsWith(monthPrefix)
+          l.startDate <= selectedDate &&
+          l.endDate >= selectedDate
       )
-      .reduce((sum, l) => sum + (l.totalDays || 0), 0);
+        ? 1
+        : 0;
 
-    const distanceKm = trips
-      .filter(
-        (t) =>
-          t.employee?._id === employee._id &&
-          t.startTime &&
-          t.startTime.startsWith(monthPrefix)
-      )
-      .reduce((sum, t) => sum + (t.distanceKm || 0), 0);
+      const distanceKm = trips
+        .filter(
+          (t) =>
+            t.employee?._id === employee._id &&
+            toISTDateStr(t.startTime) === selectedDate
+        )
+        .reduce((sum, t) => sum + (t.distanceKm || 0), 0);
 
-    return { employee, extraHours, unpaidLeaveDays, distanceKm };
-  });
+      return { employee, extraHours, unpaidLeaveDays, distanceKm };
+    });
 
   const filteredRows = reportRows.filter((row) =>
     row.employee.fullName?.toLowerCase().includes(search.toLowerCase())
@@ -125,12 +128,12 @@ export default function ReportScreen({ navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      <MonthSelector
-        month={month}
-        year={year}
+      <DaySelector
+        date={selectedDate}
         onPrev={handlePrev}
         onNext={handleNext}
-        disableNext={isCurrentMonth}
+        onSelectDate={setSelectedDate}
+        disableNext={isToday}
       />
 
       <View style={styles.searchBox}>

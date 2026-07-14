@@ -32,7 +32,7 @@ export default function useDashboard() {
       setCheckedIn(!!today?.punchInTime && !today?.punchOutTime);
 
       const monthRecords = monthlyRes.data?.attendance || [];
-      setPresentDays(monthRecords.filter((r) => r.status === "present").length);
+      setPresentDays(monthRecords.filter((r) => ["present", "approved"].includes(r.status)).length);
       setLateMarks(monthRecords.filter((r) => r.status === "late").length);
 
       const leaves = leaveRes.data?.data || [];

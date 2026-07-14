@@ -22,10 +22,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 /* =========================
-   GET TODAY DATE
+   GET TODAY DATE (Asia/Kolkata)
 ========================= */
 function getTodayDate() {
-    return new Date().toISOString().split("T")[0];
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
 /* =========================
@@ -34,8 +34,8 @@ function getTodayDate() {
 exports.startTrip = async (req, res) => {
     try {
         const userId = req.user._id; // 🔥 FROM TOKEN
-        const {purpose, lat, lng, address } = req.body;
-        
+        const { purpose, lat, lng, address } = req.body;
+
         const date = getTodayDate();
 
         let travel = await Travel.findOne({ userId, date });
@@ -54,6 +54,17 @@ exports.startTrip = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Trip already in progress"
+            });
+        }
+
+        // Today's last trip must have its meeting logged before a new one
+        // can start. Safe to check against "today" here because getTodayDate()
+        // is Asia/Kolkata-based, so this trip can never belong to a previous day.
+        if (lastTrip && lastTrip.endTime && !lastTrip.meetingDetails?.customerName) {
+            return res.status(400).json({
+                success: false,
+                message: "Add meeting details for your last trip before starting a new one",
+                meetingDetailsRequired: true
             });
         }
 
@@ -91,14 +102,7 @@ exports.startTrip = async (req, res) => {
 exports.endTrip = async (req, res) => {
     try {
         const userId = req.user._id; // 🔥 FROM TOKEN
-        const { lat, lng, address, customerName, meetingStartTime, meetingEndTime, notes } = req.body;
-
-        if (!customerName || !meetingStartTime || !meetingEndTime || !notes) {
-            return res.status(400).json({
-                success: false,
-                message: "Meeting details (customer name, start time, end time, notes) are required to end a trip"
-            });
-        }
+        const { lat, lng, address } = req.body;
 
         const date = getTodayDate();
 
@@ -135,7 +139,6 @@ exports.endTrip = async (req, res) => {
         lastTrip.durationMin = Math.round(
             (endTime - lastTrip.startTime) / 60000
         );
-        lastTrip.meetingDetails = { customerName, meetingStartTime, meetingEndTime, notes };
 
         travel.totalTrips = travel.trips.length;
         travel.totalDistanceKm = travel.trips.reduce(
@@ -153,6 +156,62 @@ exports.endTrip = async (req, res) => {
 
     } catch (error) {
         console.error("End Trip Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+/* =========================
+   LOG MEETING DETAILS FOR A FINISHED TRIP
+   (separate step from ending the trip; enforced
+   client-side immediately after the trip ends, so
+   it is always tied to a specific tripId rather than
+   a "last trip" lookup that could span calendar days)
+========================= */
+exports.logMeeting = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { tripId, customerName, meetingStartTime, meetingEndTime, notes } = req.body;
+
+        if (!tripId || !customerName || !meetingStartTime || !meetingEndTime || !notes) {
+            return res.status(400).json({
+                success: false,
+                message: "Meeting details (customer name, start time, end time, notes) are required"
+            });
+        }
+
+        const travel = await Travel.findOne({ userId, "trips._id": tripId });
+
+        if (!travel) {
+            return res.status(404).json({
+                success: false,
+                message: "Trip not found"
+            });
+        }
+
+        const trip = travel.trips.id(tripId);
+
+        if (!trip.endTime) {
+            return res.status(400).json({
+                success: false,
+                message: "Trip must be ended before logging its meeting details"
+            });
+        }
+
+        trip.meetingDetails = { customerName, meetingStartTime, meetingEndTime, notes };
+
+        await travel.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Meeting details saved successfully",
+            data: travel
+        });
+
+    } catch (error) {
+        console.error("Log Meeting Error:", error);
         res.status(500).json({
             success: false,
             message: "Server error"

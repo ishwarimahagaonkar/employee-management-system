@@ -26,8 +26,10 @@ export default function TravelHeader({
   purpose,
   setPurpose,
   btnLoading,
+  pendingMeetingTrip,
   onStart,
   onEnd,
+  onAddMeeting,
 }) {
   return (
     <LinearGradient
@@ -68,6 +70,26 @@ export default function TravelHeader({
 
             <TouchableOpacity style={styles.actionBtn} onPress={onEnd} disabled={btnLoading}>
               <Text style={styles.actionText}>{btnLoading ? "Ending..." : "End Trip"}</Text>
+            </TouchableOpacity>
+          </>
+        ) : pendingMeetingTrip ? (
+          <>
+            <View style={styles.row}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="people-outline" size={20} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.rowTitle}>Meeting Details Pending</Text>
+                <Text style={styles.rowSubtitle}>{pendingMeetingTrip?.purpose}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.pendingText}>
+              Add details for your last meeting before starting a new trip.
+            </Text>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={onAddMeeting} disabled={btnLoading}>
+              <Text style={styles.actionText}>Add Meeting Details</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -189,6 +211,13 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     marginBottom: 18,
+  },
+
+  pendingText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    marginBottom: 18,
+    lineHeight: 18,
   },
 
   actionBtn: {

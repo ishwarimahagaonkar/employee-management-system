@@ -65,11 +65,23 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+  processingText: {
+    color: "#ffffffb7",
+    fontSize: 13,
+    marginTop: 8,
+  },
+
   punchButton: {
     backgroundColor: "#fff",
     borderRadius: 18,
     paddingVertical: 16,
     alignItems: "center",
+  },
+
+  punchLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 
   punchText: {

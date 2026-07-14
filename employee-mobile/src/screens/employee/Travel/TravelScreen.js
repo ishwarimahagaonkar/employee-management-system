@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, ActivityIndicator, View, Text, StyleSheet } from "react-native";
+import { ScrollView, ActivityIndicator, View, Text, StyleSheet, Alert } from "react-native";
 
 import TravelHeader from "./components/TravelHeader";
 import TravelSummaryCard from "./components/TravelSummaryCard";
@@ -14,10 +14,12 @@ export default function TravelScreen() {
     loading,
     historyLoading,
     activeTrip,
+    pendingMeetingTrip,
     btnLoading,
     currentTrip,
     startTrip,
     endTrip,
+    logMeeting,
   } = useTravel();
 
   const [purpose, setPurpose] = useState("");
@@ -31,6 +33,14 @@ export default function TravelScreen() {
     );
   }
 
+  const handleStart = () => {
+    if (!purpose.trim()) {
+      Alert.alert("Enter purpose");
+      return;
+    }
+    startTrip(purpose, () => setPurpose(""));
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <TravelHeader
@@ -39,8 +49,10 @@ export default function TravelScreen() {
         purpose={purpose}
         setPurpose={setPurpose}
         btnLoading={btnLoading}
-        onStart={() => startTrip(purpose, () => setPurpose(""))}
-        onEnd={() => setMeetingModalVisible(true)}
+        pendingMeetingTrip={pendingMeetingTrip}
+        onStart={handleStart}
+        onEnd={() => endTrip()}
+        onAddMeeting={() => setMeetingModalVisible(true)}
       />
 
       <TravelSummaryCard
@@ -66,7 +78,9 @@ export default function TravelScreen() {
         visible={meetingModalVisible}
         loading={btnLoading}
         onClose={() => setMeetingModalVisible(false)}
-        onSubmit={(details) => endTrip(details, () => setMeetingModalVisible(false))}
+        onSubmit={(details) =>
+          logMeeting(pendingMeetingTrip._id, details, () => setMeetingModalVisible(false))
+        }
       />
     </ScrollView>
   );

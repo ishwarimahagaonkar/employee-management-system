@@ -20,6 +20,16 @@ const parseTimeToMinutes = (hhmm) => {
   return hours * 60 + minutes;
 };
 
+// True if punchInTime falls after work start time, in Asia/Kolkata timezone
+const isPunchInLate = (punchInTime, settings) => {
+  const timeInKolkata = new Date(
+    new Date(punchInTime).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
+  const minutesSinceMidnight = timeInKolkata.getHours() * 60 + timeInKolkata.getMinutes();
+  const workStartMinutes = parseTimeToMinutes(settings.workStartTime);
+  return minutesSinceMidnight > workStartMinutes;
+};
+
 
 /**
  * @desc Employee Punch In
@@ -77,11 +87,7 @@ exports.punchIn = async (req, res) => {
 
     const now = new Date();
 
-    // Attendance is marked late past (work start time + late threshold), in Asia/Kolkata timezone
-    const nowInKolkata = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const minutesSinceMidnight = nowInKolkata.getHours() * 60 + nowInKolkata.getMinutes();
-    const lateThresholdMinutes = parseTimeToMinutes(settings.workStartTime) + settings.lateThresholdMinutes;
-    const attendanceStatus = minutesSinceMidnight > lateThresholdMinutes ? "late" : "present";
+    const attendanceStatus = isPunchInLate(now, settings) ? "late" : "present";
 
     // Create attendance record
     const attendance = await Attendance.create({
@@ -189,7 +195,7 @@ exports.punchOut = async (req, res) => {
  */
 exports.requestEmergency = async (req, res) => {
   try {
-    const { reason, type, lat, lng, address } = req.body;
+    const { reason, type, lat, lng, address, photo } = req.body;
 
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
@@ -210,6 +216,7 @@ exports.requestEmergency = async (req, res) => {
         date: todayStr,
         punchInTime: new Date(),
         punchInLocation: { lat, lng, address },
+        punchInPhoto: photo,
         isOutsideLocation: true,
         emergencyRequest: true,
         emergencyReason: reason,
@@ -224,10 +231,19 @@ exports.requestEmergency = async (req, res) => {
 
       attendance.punchOutTime = new Date();
       attendance.punchOutLocation = { lat, lng, address };
+      attendance.punchOutPhoto = photo;
       attendance.isOutsideLocation = true;
       attendance.emergencyRequest = true;
       attendance.emergencyReason = reason;
       attendance.status = "pending";
+
+      const settings = await getOrgSettings();
+      const hours = calculateWorkingHours(
+        attendance.punchInTime,
+        attendance.punchOutTime
+      );
+      attendance.workingHours = hours;
+      attendance.isHalfDay = hours < settings.halfDayHours;
 
       await attendance.save();
     }
@@ -260,9 +276,16 @@ exports.approveEmergency = async (req, res) => {
       });
     }
 
-    // Update request status
-    attendance.status =
-      action === "approve" ? "approved" : "rejected";
+    // Update request status -- an approved request still counts as late
+    // if the punch-in itself happened past the work start + threshold
+    if (action === "approve") {
+      const settings = await getOrgSettings();
+      attendance.status = isPunchInLate(attendance.punchInTime, settings)
+        ? "late"
+        : "approved";
+    } else {
+      attendance.status = "rejected";
+    }
 
     // Save admin remarks
     attendance.adminComment =

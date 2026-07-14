@@ -142,7 +142,7 @@ export default function useTravel() {
     }
   };
 
-  const endTrip = async (meetingDetails, onSuccess) => {
+  const endTrip = async (onSuccess) => {
     try {
       setBtnLoading(true);
 
@@ -151,11 +151,36 @@ export default function useTravel() {
 
       await api.post(
         "/travel/end",
-        { ...loc, ...meetingDetails },
+        { ...loc },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      Alert.alert("Success", "Trip Ended");
+      await fetchTravel();
+      await fetchHistory();
+      onSuccess?.();
+    } catch (err) {
+      Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
+    } finally {
+      setBtnLoading(false);
+    }
+  };
+
+  // Records the meeting for a trip that has already ended. This is a
+  // separate step from ending the trip itself, and is always targeted at
+  // a specific tripId -- never derived from "last trip" lookups that could
+  // accidentally span into a previous calendar day.
+  const logMeeting = async (tripId, details, onSuccess) => {
+    try {
+      setBtnLoading(true);
+
+      const token = await AsyncStorage.getItem("token");
+
+      await api.post(
+        "/travel/meeting",
+        { tripId, ...details },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       await fetchTravel();
       await fetchHistory();
       onSuccess?.();
@@ -171,17 +196,27 @@ export default function useTravel() {
       ? todayTravel.trips[todayTravel.trips.length - 1]
       : null;
 
+  // Today's most recently ended trip, if it still needs its meeting logged.
+  // Scoped entirely to todayTravel (today's IST date, per the backend), so
+  // this can never point at a trip from a previous day.
+  const pendingMeetingTrip =
+    currentTrip && currentTrip.endTime && !currentTrip.meetingDetails?.customerName
+      ? currentTrip
+      : null;
+
   return {
     todayTravel,
     history,
     loading,
     historyLoading,
     activeTrip,
+    pendingMeetingTrip,
     btnLoading,
     currentTrip,
     fetchTravel,
     fetchHistory,
     startTrip,
     endTrip,
+    logMeeting,
   };
 }

@@ -12,6 +12,9 @@ const formatDate = (dateStr) => {
 };
 
 export default function EmergencyRequestCard({ record, onApprove, onReject }) {
+  const currentAddress =
+    record.punchOutLocation?.address || record.punchInLocation?.address;
+
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
@@ -27,6 +30,16 @@ export default function EmergencyRequestCard({ record, onApprove, onReject }) {
 
       <Text style={styles.reasonLabel}>Reason</Text>
       <Text style={styles.reason}>{record.emergencyReason || "No reason provided"}</Text>
+
+      {currentAddress && (
+        <>
+          <Text style={styles.reasonLabel}>Current Location</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={14} color="#9CA3AF" style={styles.locationIcon} />
+            <Text style={styles.reason}>{currentAddress}</Text>
+          </View>
+        </>
+      )}
 
       <View style={styles.actions}>
         <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => onReject(record)}>
@@ -96,6 +109,17 @@ const styles = StyleSheet.create({
     color: "#374151",
     marginTop: 4,
     marginBottom: 14,
+    flex: 1,
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  locationIcon: {
+    marginTop: 5,
+    marginRight: 4,
   },
 
   actions: {

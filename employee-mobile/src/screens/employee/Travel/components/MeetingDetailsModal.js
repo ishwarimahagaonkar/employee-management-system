@@ -15,6 +15,7 @@ export default function MeetingDetailsModal({ visible, loading, onClose, onSubmi
   const handleSubmit = () => {
     if (!isValid) return;
     onSubmit(form);
+    setForm(emptyForm);
   };
 
   return (
@@ -29,7 +30,7 @@ export default function MeetingDetailsModal({ visible, loading, onClose, onSubmi
           </View>
 
           <Text style={styles.helper}>
-            Add details about the meeting before ending this trip.
+            Add details about the meeting for your last trip.
           </Text>
 
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -81,7 +82,7 @@ export default function MeetingDetailsModal({ visible, loading, onClose, onSubmi
               onPress={handleSubmit}
               disabled={!isValid || loading}
             >
-              <Text style={styles.submitText}>{loading ? "Ending Trip..." : "Confirm & End Trip"}</Text>
+              <Text style={styles.submitText}>{loading ? "Saving..." : "Save Meeting Details"}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

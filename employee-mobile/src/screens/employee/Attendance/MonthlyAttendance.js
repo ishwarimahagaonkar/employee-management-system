@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../../api/api.js";
+import { formatHoursToHMS } from "../../../utils/formatTime.js";
 
 export default function MonthlyAttendance() {
   const [markedDates, setMarkedDates] = useState({});
@@ -58,8 +59,8 @@ export default function MonthlyAttendance() {
         const status = item.status?.toLowerCase() || "";
 
         let bgColor = "#E0E0E0";
-        if (status === "present") bgColor = "green";
-        else if (status === "absent") bgColor = "red";
+        if (status === "present" || status === "approved") bgColor = "green";
+        else if (status === "rejected" || status === "absent") bgColor = "red";
         else if (status === "late") bgColor = "blue";
 
         formatted[date] = {
@@ -140,26 +141,43 @@ export default function MonthlyAttendance() {
 
           {record ? (
             <>
-              <Text style={styles.detailText}>
-                Status: {record.status}
-              </Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <Text
+                  style={[
+                    styles.statusValue,
+                    record.status === "late" && styles.statusLate,
+                    record.status === "rejected" && styles.statusRejected,
+                  ]}
+                >
+                  {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                </Text>
+              </View>
 
-              <Text style={styles.detailText}>
-                Working Hours: {record.workingHours || 0} hrs
-              </Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Working Hours</Text>
+                <Text style={styles.detailValue}>
+                  {formatHoursToHMS(record.workingHours)}
+                </Text>
+              </View>
 
               {/* SAFE PUNCH IN */}
               {record.punchInTime && safeDate(record.punchInTime) && (
                 <>
-                  <Text style={styles.detailText}>
-                    Punch In:{" "}
-                    {safeDate(record.punchInTime).toLocaleTimeString()}
-                  </Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Punch In</Text>
+                    <Text style={styles.detailValue}>
+                      {safeDate(record.punchInTime).toLocaleTimeString()}
+                    </Text>
+                  </View>
 
                   {record.punchInLocation?.address && (
-                    <Text style={styles.detailText}>
-                      Address: {record.punchInLocation.address}
-                    </Text>
+                    <View style={styles.addressRow}>
+                      <Text style={styles.detailLabel}>Address</Text>
+                      <Text style={styles.addressValue}>
+                        {record.punchInLocation.address}
+                      </Text>
+                    </View>
                   )}
                 </>
               )}
@@ -167,15 +185,20 @@ export default function MonthlyAttendance() {
              {/* SAFE PUNCH OUT */}
               {record.punchOutTime && safeDate(record.punchOutTime) && (
                 <>
-                  <Text style={styles.detailText}>
-                    Punch Out:{" "}
-                    {safeDate(record.punchOutTime).toLocaleTimeString()}
-                  </Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Punch Out</Text>
+                    <Text style={styles.detailValue}>
+                      {safeDate(record.punchOutTime).toLocaleTimeString()}
+                    </Text>
+                  </View>
 
                   {record.punchOutLocation?.address && (
-                    <Text style={styles.detailText}>
-                      Address: {record.punchOutLocation.address}
-                    </Text>
+                    <View style={styles.addressRow}>
+                      <Text style={styles.detailLabel}>Address</Text>
+                      <Text style={styles.addressValue}>
+                        {record.punchOutLocation.address}
+                      </Text>
+                    </View>
                   )}
                 </>
               )}
@@ -230,5 +253,53 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 16,
     marginBottom: 4,
+  },
+
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
+  },
+
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+  },
+
+  detailValue: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1E1B4B",
+  },
+
+  statusValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#16A34A",
+    textTransform: "capitalize",
+  },
+
+  statusLate: {
+    color: "#D97706",
+  },
+
+  statusRejected: {
+    color: "#DC2626",
+  },
+
+  addressRow: {
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
+  },
+
+  addressValue: {
+    fontSize: 14,
+    color: "#333",
+    marginTop: 2,
   },
 });

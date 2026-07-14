@@ -7,6 +7,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/AuthContext.js";
@@ -46,55 +49,65 @@ const handleLogin = async () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        
-
-        <Text style={styles.heading}>
-          Login
-        </Text>
-
-        <Text style={styles.subHeading}>
-          Login to access your account
-        </Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        <Text style={styles.label}>Email Address</Text>
-
-        <TextInput
-          placeholder="name@company.com"
-          placeholderTextColor="#94A3B8"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        <Text style={styles.label}>Password</Text>
-
-        <TextInput
-          placeholder="Enter password"
-          placeholderTextColor="#94A3B8"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={handleLogin}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.loginButtonText}>
-            Sign In
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.header}>
+            <Text style={styles.heading}>
+              Login
+            </Text>
 
-      {/* <Text style={styles.footer}>
-        @2026 Obsidian.dev • all rights reserved.
-      </Text> */}
+            <Text style={styles.subHeading}>
+              Login to access your account
+            </Text>
+          </View>
+
+          <View style={styles.formContainer}>
+            <Text style={styles.label}>Email Address</Text>
+
+            <TextInput
+              placeholder="name@company.com"
+              placeholderTextColor="#94A3B8"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.label}>Password</Text>
+
+            <TextInput
+              placeholder="Enter password"
+              placeholderTextColor="#94A3B8"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={styles.input}
+            />
+
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+            >
+              <Text style={styles.loginButtonText}>
+                Sign In
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* <Text style={styles.footer}>
+            @2026 Obsidian.dev • all rights reserved.
+          </Text> */}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -103,8 +116,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+  },
+
+  flex: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: 24,
   },
 
   header: {
@@ -156,6 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     fontSize: 15,
+    color: "#0F172A",
     backgroundColor: "#FFFFFF",
     marginBottom: 18,
   },

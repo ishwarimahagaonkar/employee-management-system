@@ -48,10 +48,6 @@ const settingsSchema = new mongoose.Schema(
             type: String, // "HH:MM"
             default: "18:00",
         },
-        lateThresholdMinutes: {
-            type: Number,
-            default: 30,
-        },
         halfDayHours: {
             type: Number,
             default: 4,

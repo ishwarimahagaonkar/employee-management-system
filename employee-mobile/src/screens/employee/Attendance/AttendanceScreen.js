@@ -30,9 +30,11 @@ export default function AttendanceScreen() {
   const [cameraPermission, setCameraPermission] = useState(null);
   const [locationPermission, setLocationPermission] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [punchLoading, setPunchLoading] = useState(false);
   const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
   const [emergencyType, setEmergencyType] = useState(null);
   const [pendingLocation, setPendingLocation] = useState(null);
+  const [pendingPhoto, setPendingPhoto] = useState(null);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
   const cameraRef = useRef(null);   // ✅ Proper ref
   const navigation = useNavigation();
@@ -46,7 +48,7 @@ export default function AttendanceScreen() {
 
   // Monthly summary counts
   const presentCount =
-    attendanceHistory.filter((item) => item.status?.toLowerCase() === "present").length || 0;
+    attendanceHistory.filter((item) => ["present", "approved"].includes(item.status?.toLowerCase())).length || 0;
   const lateCount =
     attendanceHistory.filter((item) => item.status?.toLowerCase() === "late").length || 0;
   const absentCount =
@@ -90,7 +92,7 @@ export default function AttendanceScreen() {
        const requestPermissions = async () => {
         const camera = await Camera.requestCameraPermissionsAsync();
         const location = await Location.requestForegroundPermissionsAsync();
-
+       
         setCameraPermission(camera.granted);
         setLocationPermission(location.granted);
       };
@@ -101,8 +103,10 @@ export default function AttendanceScreen() {
 
   const handlePunch = async (type) => {
     let capturedLocation = null;
+    let photo = null;
 
     try {
+      setPunchLoading(true);
       setShowCamera(true);
 
     // Give camera a moment to start
@@ -149,7 +153,6 @@ export default function AttendanceScreen() {
       return;
     }
       // Capture selfie
-      let photo = null;
       if (cameraRef.current) {
         photo = await cameraRef.current.takePictureAsync({ base64: true });
 
@@ -208,13 +211,16 @@ export default function AttendanceScreen() {
       if (err.response?.data?.outsideLocation && capturedLocation) {
         setEmergencyType(type);
         setPendingLocation(capturedLocation);
+        setPendingPhoto(photo);
         setEmergencyModalVisible(true);
       } else {
         alert(err.response?.data?.message || `${type} failed`);
       }
       console.log(err.response?.data || err.message);
+    } finally {
+      setShowCamera(false);
+      setPunchLoading(false);
     }
-    console.log("hasPunchedOut:", hasPunchedOut, typeof hasPunchedOut);
   };
 
   const submitEmergencyRequest = async (reason) => {
@@ -223,7 +229,12 @@ export default function AttendanceScreen() {
       const token = await AsyncStorage.getItem("token");
       const res = await api.post(
         "/attendance/emergency-request",
-        { type: emergencyType, reason, ...pendingLocation },
+        {
+          type: emergencyType,
+          reason,
+          ...pendingLocation,
+          photo: pendingPhoto ? pendingPhoto.base64 : null,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -256,36 +267,45 @@ export default function AttendanceScreen() {
 
           {/* Camera Preview */}
           <View style={styles.mapPlaceholder}>
-            <Ionicons name="camera-outline" size={40} color="#ffffffb7" />
-            {showCamera && (
+            {showCamera ? (
               <CameraView
-                style={{ width: "100%", height: "100%" }}
+                style={{ width: "100%", height: "100%", borderRadius: 18 }}
                 ref={cameraRef}
                 facing="front"
               />
+            ) : punchLoading ? (
+              <>
+                <ActivityIndicator size="small" color="#ffffffb7" />
+                <Text style={styles.processingText}>Processing...</Text>
+              </>
+            ) : (
+              <Ionicons name="camera-outline" size={40} color="#ffffffb7" />
             )}
           </View>
 
           <TouchableOpacity
             style={styles.punchButton}
-            disabled={hasPunchedOut}
-            
+            disabled={hasPunchedOut || punchLoading}
             onPress={() => {
-              setShowCamera(true);
               hasPunchedIn
                 ? handlePunch("punch-out")
                 : handlePunch("punch-in");
             }}
           >
-          
-          
-            <Text style={styles.punchText}>
-              {hasPunchedIn
-                ? "Punch Out"
-                : hasPunchedOut
-                ? "Attendance Completed"
-                : "Punch In"}
-            </Text>
+            {punchLoading ? (
+              <View style={styles.punchLoadingRow}>
+                <ActivityIndicator size="small" color="#6C63FF" />
+                <Text style={styles.punchText}>Processing...</Text>
+              </View>
+            ) : (
+              <Text style={styles.punchText}>
+                {hasPunchedIn
+                  ? "Punch Out"
+                  : hasPunchedOut
+                  ? "Attendance Completed"
+                  : "Punch In"}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>

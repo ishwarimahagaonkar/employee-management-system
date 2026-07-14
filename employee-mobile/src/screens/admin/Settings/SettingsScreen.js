@@ -27,7 +27,6 @@ const emptyForm = {
   enforceGps: true,
   workStartTime: "",
   workEndTime: "",
-  lateThresholdMinutes: "",
   halfDayHours: "",
 };
 
@@ -43,7 +42,6 @@ const formFromSettings = (s = {}) => ({
   enforceGps: !!s.enforceGps,
   workStartTime: s.workStartTime || "",
   workEndTime: s.workEndTime || "",
-  lateThresholdMinutes: String(s.lateThresholdMinutes ?? ""),
   halfDayHours: String(s.halfDayHours ?? ""),
 });
 
@@ -95,7 +93,6 @@ export default function SettingsScreen({ navigation }) {
         enforceGps: form.enforceGps,
         workStartTime: form.workStartTime,
         workEndTime: form.workEndTime,
-        lateThresholdMinutes: parseInt(form.lateThresholdMinutes, 10) || 0,
         halfDayHours: parseFloat(form.halfDayHours) || 0,
       });
       const next = formFromSettings(res.data?.data);
@@ -264,24 +261,13 @@ export default function SettingsScreen({ navigation }) {
               placeholder="18:00"
             />
           </View>
-          <View style={styles.row}>
-            <SettingsField
-              half
-              editable={isEditing}
-              label="Late Mark Threshold (minutes)"
-              value={form.lateThresholdMinutes}
-              onChangeText={update("lateThresholdMinutes")}
-              keyboardType="numeric"
-            />
-            <SettingsField
-              half
-              editable={isEditing}
-              label="Half Day Hours"
-              value={form.halfDayHours}
-              onChangeText={update("halfDayHours")}
-              keyboardType="numeric"
-            />
-          </View>
+          <SettingsField
+            editable={isEditing}
+            label="Half Day Hours"
+            value={form.halfDayHours}
+            onChangeText={update("halfDayHours")}
+            keyboardType="numeric"
+          />
         </SettingsCard>
 
         {isEditing && (

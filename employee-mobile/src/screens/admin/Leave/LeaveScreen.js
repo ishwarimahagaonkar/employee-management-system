@@ -35,9 +35,15 @@ export default function LeaveScreen({ navigation }) {
     fetchLeaves();
   }, []);
 
+  const daysFor = (status) =>
+    leaves
+      .filter((l) => l.status === status)
+      .reduce((sum, l) => sum + (l.totalDays || 0), 0);
+
   const pendingLeaves = leaves.filter((l) => l.status === "Pending");
-  const approvedCount = leaves.filter((l) => l.status === "Approved").length;
-  const rejectedCount = leaves.filter((l) => l.status === "Rejected").length;
+  const pendingDays = daysFor("Pending");
+  const approvedDays = daysFor("Approved");
+  const rejectedDays = daysFor("Rejected");
 
   const updateStatus = async (leave, status) => {
     try {
@@ -72,9 +78,9 @@ export default function LeaveScreen({ navigation }) {
           ListHeaderComponent={
             <>
               <View style={styles.statsRow}>
-                <LeaveStatCard value={pendingLeaves.length} label="Pending" color="#0891B2" />
-                <LeaveStatCard value={approvedCount} label="Approved" color="#16A34A" />
-                <LeaveStatCard value={rejectedCount} label="Rejected" color="#DC2626" />
+                <LeaveStatCard value={pendingDays} label="Pending Days" color="#0891B2" />
+                <LeaveStatCard value={approvedDays} label="Approved Days" color="#16A34A" />
+                <LeaveStatCard value={rejectedDays} label="Rejected Days" color="#DC2626" />
               </View>
 
               <Text style={styles.sectionTitle}>Pending Approvals</Text>

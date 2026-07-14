@@ -14,6 +14,9 @@ router.post("/start",protect, travelController.startTrip);
 // End Trip
 router.post("/end",protect, travelController.endTrip);
 
+// Log meeting details for a trip that has already ended
+router.post("/meeting", protect, travelController.logMeeting);
+
 // Get today's travel data (for cards)
 router.get("/today",protect, travelController.getTodayTravel);
 
