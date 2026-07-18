@@ -28,7 +28,7 @@ export default function TravelScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#7C3AED" />
+        <ActivityIndicator size="large" color="#112250" />
       </View>
     );
   }
@@ -64,7 +64,7 @@ export default function TravelScreen() {
         <Text style={styles.historyTitle}>Travel History</Text>
 
         {historyLoading ? (
-          <ActivityIndicator size="large" color="#7C3AED" />
+          <ActivityIndicator size="large" color="#112250" />
         ) : history.length === 0 ? (
           <Text style={styles.emptyText}>No travel records found</Text>
         ) : (

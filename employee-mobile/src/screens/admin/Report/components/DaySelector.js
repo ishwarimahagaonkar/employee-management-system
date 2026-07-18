@@ -39,11 +39,11 @@ export default function DaySelector({ date, onPrev, onNext, onSelectDate, disabl
     <View style={styles.wrapper}>
       <View style={styles.row}>
         <TouchableOpacity style={styles.arrowBtn} onPress={onPrev}>
-          <Ionicons name="chevron-back" size={20} color="#6D5DF6" />
+          <Ionicons name="chevron-back" size={20} color="#112250" />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.dateBtn} onPress={openPicker}>
-          <Ionicons name="calendar-outline" size={16} color="#6D5DF6" style={styles.calendarIcon} />
+          <Ionicons name="calendar-outline" size={16} color="#112250" style={styles.calendarIcon} />
           <Text style={styles.label}>{formatDate(date)}</Text>
         </TouchableOpacity>
 
@@ -52,7 +52,7 @@ export default function DaySelector({ date, onPrev, onNext, onSelectDate, disabl
           onPress={onNext}
           disabled={disableNext}
         >
-          <Ionicons name="chevron-forward" size={20} color={disableNext ? "#D1D5DB" : "#6D5DF6"} />
+          <Ionicons name="chevron-forward" size={20} color={disableNext ? "#D1D5DB" : "#112250"} />
         </TouchableOpacity>
       </View>
 
@@ -86,11 +86,11 @@ export default function DaySelector({ date, onPrev, onNext, onSelectDate, disabl
                 setPickerVisible(false);
               }}
               onMonthChange={(month) => setCalendarCurrent(month.dateString)}
-              markedDates={{ [date]: { selected: true, selectedColor: "#6D5DF6" } }}
+              markedDates={{ [date]: { selected: true, selectedColor: "#112250" } }}
               theme={{
-                todayTextColor: "#6D5DF6",
-                selectedDayBackgroundColor: "#6D5DF6",
-                arrowColor: "#6D5DF6",
+                todayTextColor: "#112250",
+                selectedDayBackgroundColor: "#112250",
+                arrowColor: "#112250",
               }}
             />
           </TouchableOpacity>
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
 
   yearChipActive: {
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
   },
 
   yearChipText: {

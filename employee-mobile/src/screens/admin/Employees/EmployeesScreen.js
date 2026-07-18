@@ -29,7 +29,6 @@ export default function EmployeesScreen({ navigation }) {
       const res = await api.get("/employees");
       setEmployees(res.data.employees || []);
     } catch (err) {
-      console.log("Fetch employees error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -137,7 +136,7 @@ export default function EmployeesScreen({ navigation }) {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        <ActivityIndicator size="large" color="#112250" style={styles.loader} />
       ) : (
         <FlatList
           data={filtered}
@@ -186,7 +185,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
     alignItems: "center",
     justifyContent: "center",
   },

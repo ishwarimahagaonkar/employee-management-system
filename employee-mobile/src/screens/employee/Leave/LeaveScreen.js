@@ -36,7 +36,6 @@ export default function LeaveScreen() {
       const res = await api.get("/leave/my-leaves");
       setLeaves(res.data.data || []);
     } catch (err) {
-      console.log("FETCH ERROR:", err.response?.data || err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -86,7 +85,6 @@ export default function LeaveScreen() {
       setShowForm(false);
       fetchLeaves();
     } catch (err) {
-      console.log("APPLY ERROR:", err.response?.data || err.message);
       Alert.alert("Error", err.response?.data?.message || "Failed to apply leave");
     }
   };

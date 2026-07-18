@@ -39,7 +39,6 @@ export default function AttendanceScreen({ navigation }) {
       setEmployees(employeesRes.data?.employees || []);
       setAttendance(attendanceRes.data?.attendance || []);
     } catch (err) {
-      console.log("Attendance fetch error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -138,7 +137,7 @@ export default function AttendanceScreen({ navigation }) {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        <ActivityIndicator size="large" color="#112250" style={styles.loader} />
       ) : tab === "today" ? (
         <FlatList
           data={employees}
@@ -242,13 +241,13 @@ const styles = StyleSheet.create({
   },
 
   tabActive: {
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
   },
 
   tabText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#6D5DF6",
+    color: "#112250",
   },
 
   tabTextActive: {

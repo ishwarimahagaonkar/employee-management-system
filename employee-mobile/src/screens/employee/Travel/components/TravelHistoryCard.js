@@ -27,7 +27,7 @@ export default function TravelHistoryCard({ trip }) {
     <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.icon}>
-          <Ionicons name="location" size={18} color="#7C3AED" />
+          <Ionicons name="location" size={18} color="#112250" />
         </View>
 
         <View style={styles.titleBlock}>
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     fontSize: 12,
-    color: "#7C3AED",
+    color: "#112250",
     marginTop: 1,
   },
 
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
 
   meetingTime: {
     fontSize: 12,
-    color: "#7C3AED",
+    color: "#112250",
     marginTop: 2,
   },
 

@@ -1,5 +1,5 @@
 import React, { useContext } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { createDrawerNavigator, DrawerContentScrollView } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -43,7 +43,6 @@ function CustomDrawerContent(props) {
     try {
       await api.post("/auth/logout");
     } catch (error) {
-      console.log("Logout error:", error);
     } finally {
       await logout();
     }
@@ -51,6 +50,15 @@ function CustomDrawerContent(props) {
 
   return (
     <SafeAreaView style={styles.drawerContainer}>
+      <View style={styles.brandRow}>
+        <Image
+          source={require("../../assets/logo-navy.png")}
+          style={styles.brandLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.brandText}>StaffTrack</Text>
+      </View>
+
       <View style={styles.profileBlock}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials(user?.fullName)}</Text>
@@ -71,7 +79,7 @@ function CustomDrawerContent(props) {
               <Ionicons
                 name={item.icon}
                 size={20}
-                color={focused ? "#6D5DF6" : "#6B7280"}
+                color={focused ? "#112250" : "#6B7280"}
                 style={styles.itemIcon}
               />
               <Text style={[styles.itemLabel, focused && styles.itemLabelActive]}>
@@ -113,6 +121,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+
+  brandLogo: {
+    width: 24,
+    height: 24,
+    marginRight: 10,
+  },
+
+  brandText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#112250",
+    letterSpacing: 0.3,
+  },
+
   profileBlock: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -132,7 +160,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: "#6D5DF6",
+    color: "#112250",
     fontSize: 20,
     fontWeight: "700",
   },
@@ -177,7 +205,7 @@ const styles = StyleSheet.create({
   },
 
   itemLabelActive: {
-    color: "#6D5DF6",
+    color: "#112250",
   },
 
   logoutBtn: {

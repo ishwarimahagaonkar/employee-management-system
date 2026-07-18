@@ -29,7 +29,7 @@ export default function TravelScreen({ navigation }) {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        <ActivityIndicator size="large" color="#112250" style={styles.loader} />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <TravelSummaryCards

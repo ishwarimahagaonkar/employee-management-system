@@ -47,7 +47,6 @@ exports.protect = async (req, res, next) => {
 
 // ADMIN ONLY
 exports.adminOnly = (req, res, next) => {
-    console.log("USER FROM DB:", req.user);
 
     if (!req.user || req.user.role !== "admin") {
         return res.status(403).json({

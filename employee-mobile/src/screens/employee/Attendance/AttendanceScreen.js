@@ -80,7 +80,6 @@ export default function AttendanceScreen() {
       });
       setMarkedDates(formatted);
     } catch (err) {
-      console.log(err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -185,7 +184,6 @@ export default function AttendanceScreen() {
             .join(", ");
         }
       } catch (err) {
-        console.log("Reverse geocode failed:", err.message);
       }
 
       capturedLocation = {
@@ -216,7 +214,6 @@ export default function AttendanceScreen() {
       } else {
         alert(err.response?.data?.message || `${type} failed`);
       }
-      console.log(err.response?.data || err.message);
     } finally {
       setShowCamera(false);
       setPunchLoading(false);
@@ -294,7 +291,7 @@ export default function AttendanceScreen() {
           >
             {punchLoading ? (
               <View style={styles.punchLoadingRow}>
-                <ActivityIndicator size="small" color="#6C63FF" />
+                <ActivityIndicator size="small" color="#112250" />
                 <Text style={styles.punchText}>Processing...</Text>
               </View>
             ) : (
@@ -317,7 +314,7 @@ export default function AttendanceScreen() {
           {/* Present */}
           <View style={styles.statItem}>
             <View style={[styles.iconCircle, { backgroundColor: "#ECEAFF" }]}>
-              <Ionicons name="checkmark-circle-outline" size={24} color="#6C63FF" />
+              <Ionicons name="checkmark-circle-outline" size={24} color="#08009f80" />
             </View>
             <Text style={styles.count}>{presentCount}</Text>
             <Text style={styles.statLabel}>Present</Text>
@@ -325,7 +322,7 @@ export default function AttendanceScreen() {
           {/* Late */}
           <View style={styles.statItem}>
             <View style={[styles.iconCircle, { backgroundColor: "#FFECEC" }]}>
-              <MaterialIcons name="access-time" size={22} color="#FF5B5B" />
+              <MaterialIcons name="access-time" size={22} color="#ff5b5b8a" />
             </View>
             <Text style={styles.count}>{lateCount}</Text>
             <Text style={styles.statLabel}>Late</Text>
@@ -350,7 +347,7 @@ export default function AttendanceScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#b463ff" style={{ marginTop: 20 }} />
+        <ActivityIndicator size="large" color="#112250" style={{ marginTop: 20 }} />
       ) : attendanceHistory.length === 0 ? (
         <Text style={{ textAlign: "center", marginTop: 20, color: "#777" }}>
           No attendance records found

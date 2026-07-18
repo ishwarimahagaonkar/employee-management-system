@@ -33,11 +33,11 @@ export default function DateField({ label, value, onChange, minDate }) {
                 onChange(day.dateString);
                 setVisible(false);
               }}
-              markedDates={value ? { [value]: { selected: true, selectedColor: "#6D5DF6" } } : {}}
+              markedDates={value ? { [value]: { selected: true, selectedColor: "#112250" } } : {}}
               theme={{
-                todayTextColor: "#6D5DF6",
-                selectedDayBackgroundColor: "#6D5DF6",
-                arrowColor: "#6D5DF6",
+                todayTextColor: "#112250",
+                selectedDayBackgroundColor: "#112250",
+                arrowColor: "#112250",
               }}
             />
           </TouchableOpacity>

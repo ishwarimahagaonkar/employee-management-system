@@ -32,7 +32,7 @@ const initials = (name) =>
 const InfoRow = ({ icon, label, value }) => (
   <View style={styles.row}>
     <View style={styles.rowIcon}>
-      <Ionicons name={icon} size={20} color="#6D5DF6" />
+      <Ionicons name={icon} size={20} color="#112250" />
     </View>
     <View style={styles.rowText}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -55,7 +55,6 @@ export default function ProfileScreen({navigation}) {
       const res = await API.get("/employees/me");
       setProfile(res.data);
     } catch (error) {
-      console.log("Fetch profile error:", error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
@@ -68,14 +67,13 @@ export default function ProfileScreen({navigation}) {
       await logout();
 
     } catch (error) {
-      console.log("Logout error:", error);
     }
   };
 
   if (loading && !profile) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#6D5DF6" />
+        <ActivityIndicator size="large" color="#112250" />
       </View>
     );
   }
@@ -83,7 +81,7 @@ export default function ProfileScreen({navigation}) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#6D5DF6", "#8B7DFB"]}
+        colors={["#112250", "#112250"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}

@@ -79,7 +79,6 @@ export default function MonthlyAttendance() {
 
       setMarkedDates(formatted);
     } catch (err) {
-      console.log(err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -109,7 +108,7 @@ export default function MonthlyAttendance() {
         style={styles.backButton}
         onPress={() => navigation.goBack()}
       >
-        <Ionicons name="arrow-back" size={24} color="#6C63FF" />
+        <Ionicons name="arrow-back" size={24} color="#112250" />
         <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
 
@@ -117,15 +116,15 @@ export default function MonthlyAttendance() {
 
       {/* CALENDAR */}
       {loading ? (
-        <ActivityIndicator size="large" color="#6C63FF" />
+        <ActivityIndicator size="large" color="#112250" />
       ) : (
         <Calendar
           markingType={"custom"}
           markedDates={markedDates}
           onDayPress={(day) => setSelectedDay(day.dateString)}
           theme={{
-            todayTextColor: "#6C63FF",
-            arrowColor: "#6C63FF",
+            todayTextColor: "#112250",
+            arrowColor: "#112250",
             textDayFontWeight: "600",
             textMonthFontWeight: "700",
           }}
@@ -226,7 +225,7 @@ const styles = StyleSheet.create({
 
   backText: {
     marginLeft: 6,
-    color: "#6C63FF",
+    color: "#112250",
     fontWeight: "600",
     fontSize: 16,
   },

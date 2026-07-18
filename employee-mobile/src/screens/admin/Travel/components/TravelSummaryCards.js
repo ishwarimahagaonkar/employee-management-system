@@ -5,7 +5,7 @@ export default function TravelSummaryCards({ totalDistanceKm, activeTripsCount, 
   return (
     <View style={styles.row}>
       <View style={styles.card}>
-        <Text style={[styles.value, { color: "#7C3AED" }]}>{totalDistanceKm} km</Text>
+        <Text style={[styles.value, { color: "#112250" }]}>{totalDistanceKm} km</Text>
         <Text style={styles.label}>Total Distance</Text>
       </View>
       <View style={styles.card}>

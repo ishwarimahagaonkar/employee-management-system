@@ -10,7 +10,7 @@ export default function TravelSummaryCard({ totalTrips, totalDistanceKm }) {
       <View style={styles.row}>
         <View style={styles.item}>
           <View style={[styles.iconBadge, { backgroundColor: "#EDE9FE" }]}>
-            <Ionicons name="navigate" size={20} color="#7C3AED" />
+            <Ionicons name="navigate" size={20} color="#112250" />
           </View>
           <Text style={styles.value}>{totalTrips || 0}</Text>
           <Text style={styles.label}>Total Trips</Text>

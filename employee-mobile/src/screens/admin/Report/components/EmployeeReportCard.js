@@ -54,7 +54,7 @@ export default function EmployeeReportCard({ employee, extraHours, unpaidLeaveDa
         />
         <Metric
           icon="location-outline"
-          iconColor="#7C3AED"
+          iconColor="#112250"
           iconBg="#EDE9FE"
           value={`${distanceKm.toFixed(1)} km`}
           label="Traveled"
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: "#6D5DF6",
+    color: "#112250",
     fontWeight: "700",
     fontSize: 13,
   },

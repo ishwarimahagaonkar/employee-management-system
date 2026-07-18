@@ -27,7 +27,7 @@ export default function EmployeeListItem({ employee, onEdit, onDelete }) {
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(employee)}>
-          <Ionicons name="create-outline" size={18} color="#6D5DF6" />
+          <Ionicons name="create-outline" size={18} color="#112250" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => onDelete(employee)}>
           <Ionicons name="trash-outline" size={18} color="#EF4444" />
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: "#6D5DF6",
+    color: "#112250",
     fontWeight: "700",
   },
 
