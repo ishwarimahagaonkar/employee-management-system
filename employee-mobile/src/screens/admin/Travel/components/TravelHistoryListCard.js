@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: "#7C3AED",
+    color: "#112250",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
 
   customer: {
     fontSize: 12,
-    color: "#7C3AED",
+    color: "#112250",
     marginTop: 2,
   },
 

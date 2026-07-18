@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
 
   roleBtnActive: {
     backgroundColor: "#EEECFF",
-    borderColor: "#6D5DF6",
+    borderColor: "#112250",
   },
 
   roleBtnText: {
@@ -234,11 +234,11 @@ const styles = StyleSheet.create({
   },
 
   roleBtnTextActive: {
-    color: "#6D5DF6",
+    color: "#112250",
   },
 
   submitBtn: {
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
     borderRadius: 16,
     paddingVertical: 15,
     alignItems: "center",

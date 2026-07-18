@@ -10,7 +10,7 @@ export default function PlaceholderScreen({ route }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconBadge}>
-          <Ionicons name={icon} size={28} color="#6D5DF6" />
+          <Ionicons name={icon} size={28} color="#112250" />
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>This section is coming soon.</Text>

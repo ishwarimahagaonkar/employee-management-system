@@ -59,7 +59,6 @@ export default function SettingsScreen({ navigation }) {
       setForm(next);
       setSavedForm(next);
     } catch (err) {
-      console.log("Settings fetch error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -115,7 +114,7 @@ export default function SettingsScreen({ navigation }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        <ActivityIndicator size="large" color="#112250" style={styles.loader} />
       </SafeAreaView>
     );
   }
@@ -133,7 +132,7 @@ export default function SettingsScreen({ navigation }) {
 
           {!isEditing && (
             <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
-              <Ionicons name="pencil" size={16} color="#6D5DF6" style={{ marginRight: 6 }} />
+              <Ionicons name="pencil" size={16} color="#112250" style={{ marginRight: 6 }} />
               <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
           )}
@@ -142,7 +141,7 @@ export default function SettingsScreen({ navigation }) {
 
         <SettingsCard
           icon="document-text-outline"
-          iconColor="#6D5DF6"
+          iconColor="#112250"
           iconBg="#EEECFF"
           title="Company Profile"
           subtitle="Update your organization details"
@@ -191,7 +190,7 @@ export default function SettingsScreen({ navigation }) {
 
         <SettingsCard
           icon="location-outline"
-          iconColor="#7C3AED"
+          iconColor="#112250"
           iconBg="#EDE9FE"
           title="Office Geofence Settings"
           subtitle="Configure location-based attendance"
@@ -332,7 +331,7 @@ const styles = StyleSheet.create({
   editBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#6D5DF6",
+    color: "#112250",
   },
 
   subtitle: {
@@ -370,8 +369,8 @@ const styles = StyleSheet.create({
   },
 
   checkboxChecked: {
-    backgroundColor: "#6D5DF6",
-    borderColor: "#6D5DF6",
+    backgroundColor: "#112250",
+    borderColor: "#112250",
   },
 
   checkboxLabel: {
@@ -402,7 +401,7 @@ const styles = StyleSheet.create({
 
   saveBtn: {
     flex: 1,
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",

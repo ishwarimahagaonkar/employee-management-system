@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
-import api from "../../../../api/api.js";
+import api from "../../../api/api.js";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -20,7 +20,7 @@ const initials = (name) =>
     .map((part) => part[0].toUpperCase())
     .join("");
 
-export default function DashboardHeader({ name, checkedIn }) {
+export default function AdminDashboardHeader({ name, onMenuPress, attendanceRate, showProgress }) {
   const [companyName, setCompanyName] = useState("");
 
   useEffect(() => {
@@ -37,15 +37,10 @@ export default function DashboardHeader({ name, checkedIn }) {
   }, []);
 
   return (
-    <LinearGradient
-      colors={["#112250", "#1a3a8c"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.header}
-    >
+    <LinearGradient colors={["#112250", "#1a3a8c"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
       <View style={styles.brandRow}>
         <Image
-          source={require("../../../../../assets/logo-white.png")}
+          source={require("../../../../assets/logo-white.png")}
           style={styles.brandLogo}
           resizeMode="contain"
         />
@@ -58,27 +53,28 @@ export default function DashboardHeader({ name, checkedIn }) {
         )}
       </View>
 
-      <View style={styles.topRow}>
-        <View>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.name}>{name}</Text>
-        </View>
-
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={onMenuPress} style={styles.menuBtn}>
+          <Ionicons name="menu" size={20} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.screenLabel}>Dashboard</Text>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials(name)}</Text>
         </View>
       </View>
 
-      <View style={styles.statusCard}>
-        <View>
-          <Text style={styles.statusLabel}>Current Status</Text>
-          <Text style={styles.statusValue}>{checkedIn ? "Checked In" : "Checked Out"}</Text>
-        </View>
+      <Text style={styles.greeting}>{getGreeting()}</Text>
+      <Text style={styles.name}>{name}</Text>
 
-        <View style={styles.clockBadge}>
-          <Ionicons name="time-outline" size={20} color="#fff" />
+      {showProgress && (
+        <View style={styles.progressCard}>
+          <Text style={styles.progressLabel}>Today's Attendance</Text>
+          <Text style={styles.progressValue}>{attendanceRate}%</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${attendanceRate}%` }]} />
+          </View>
         </View>
-      </View>
+      )}
     </LinearGradient>
   );
 }
@@ -122,29 +118,32 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  topRow: {
+  topBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 22,
   },
 
-  greeting: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 14,
+  menuBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  name: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 2,
+  screenLabel: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
@@ -152,38 +151,53 @@ const styles = StyleSheet.create({
 
   avatarText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
   },
 
-  statusCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  greeting: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+  },
+
+  name: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 2,
+    marginBottom: 20,
+  },
+
+  progressCard: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.25)",
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
   },
 
-  statusLabel: {
+  progressLabel: {
     color: "rgba(255,255,255,0.8)",
     fontSize: 12,
   },
 
-  statusValue: {
+  progressValue: {
     color: "#fff",
     fontSize: 20,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 10,
   },
 
-  clockBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
     backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#fff",
   },
 });

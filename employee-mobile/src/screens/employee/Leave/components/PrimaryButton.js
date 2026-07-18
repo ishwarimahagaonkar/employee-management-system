@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   },
 
   solid: {
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
   },
 
   solidText: {
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   },
 
   whiteText: {
-    color: "#2563EB",
+    color: "#112250",
     fontSize: 16,
     fontWeight: "700",
   },

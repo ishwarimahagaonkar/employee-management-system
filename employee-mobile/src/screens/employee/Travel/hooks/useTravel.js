@@ -29,7 +29,6 @@ export default function useTravel() {
 
       setActiveTrip(lastTrip && !lastTrip.endTime);
     } catch (err) {
-      console.log(err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -51,7 +50,6 @@ export default function useTravel() {
 
       setHistory(allTrips);
     } catch (err) {
-      console.log(err.response?.data || err.message);
     } finally {
       setHistoryLoading(false);
     }
@@ -108,7 +106,6 @@ export default function useTravel() {
           .join(", ");
       }
     } catch (err) {
-      console.log("Reverse geocode failed:", err.message);
     }
 
     return { lat: latitude, lng: longitude, address };

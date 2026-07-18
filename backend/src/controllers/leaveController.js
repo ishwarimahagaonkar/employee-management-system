@@ -33,7 +33,6 @@ exports.applyLeave = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Apply Leave Error:", error);
 
         res.status(500).json({
             success: false,
@@ -59,7 +58,6 @@ exports.getMyLeaves = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get Leaves Error:", error);
 
         res.status(500).json({
             success: false,
@@ -84,7 +82,6 @@ exports.getAllLeaves = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get All Leaves Error:", error);
 
         res.status(500).json({
             success: false,
@@ -120,7 +117,6 @@ exports.getLeaveById = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
 
         res.status(500).json({
             success: false,
@@ -165,7 +161,6 @@ exports.cancelLeave = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
 
         res.status(500).json({
             success: false,
@@ -210,7 +205,6 @@ exports.updateLeaveStatus = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
 
         res.status(500).json({
             success: false,

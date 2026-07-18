@@ -33,7 +33,7 @@ export default function TravelHeader({
 }) {
   return (
     <LinearGradient
-      colors={["#8B5CF6", "#22D3EE"]}
+      colors={["#112250", "#112250"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.header}
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
 
   actionText: {
-    color: "#7C3AED",
+    color: "#112250",
     fontSize: 16,
     fontWeight: "700",
   },

@@ -25,7 +25,6 @@ export default function LeaveScreen({ navigation }) {
       const res = await api.get("/leave");
       setLeaves(res.data?.data || []);
     } catch (err) {
-      console.log("Fetch leaves error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -68,7 +67,7 @@ export default function LeaveScreen({ navigation }) {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+        <ActivityIndicator size="large" color="#112250" style={styles.loader} />
       ) : (
         <FlatList
           data={leaves}

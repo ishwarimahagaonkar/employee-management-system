@@ -1,26 +1,38 @@
 import React, { useContext, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AuthContext } from "../../context/AuthContext";
 import api from "../../api/api.js";
+import AdminDashboardHeader from "./components/AdminDashboardHeader";
+import DashboardStatCard from "./components/DashboardStatCard";
 
 const QUICK_ACTIONS = [
-  { route: "Employees", label: "Manage Employees", icon: "people-outline" },
-  { route: "Attendance", label: "Attendance Records", icon: "time-outline" },
-  { route: "Report", label: "Generate Reports", icon: "document-text-outline" },
+  {
+    route: "Employees",
+    label: "Manage Employees",
+    icon: "people-outline",
+    iconBg: "#EEECFF",
+    iconColor: "#112250",
+  },
+  {
+    route: "Attendance",
+    label: "Attendance Records",
+    icon: "time-outline",
+    iconBg: "#FEF3C7",
+    iconColor: "#D97706",
+  },
+  {
+    route: "Report",
+    label: "Generate Reports",
+    icon: "document-text-outline",
+    iconBg: "#DCFCE7",
+    iconColor: "#16A34A",
+  },
 ];
 
-const getTodayStr = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+const getTodayStr = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
 export default function AdminDashboard({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -51,7 +63,6 @@ export default function AdminDashboard({ navigation }) {
 
         setStats({ total, present, absent, late });
       } catch (err) {
-        console.log("Admin stats error:", err.response?.data || err.message);
       } finally {
         setLoading(false);
       }
@@ -60,55 +71,71 @@ export default function AdminDashboard({ navigation }) {
     fetchStats();
   }, []);
 
+  const attendanceRate =
+    stats.total > 0 ? Math.round(((stats.present + stats.late) / stats.total) * 100) : 0;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.openDrawer()}>
-            <Ionicons name="menu" size={24} color="#1E1B4B" />
-          </TouchableOpacity>
-          <Text style={styles.welcome}>Welcome, {user?.fullName || "Admin"} !!!</Text>
-        </View>
-        <Text style={styles.subtitle}>Dashboard</Text>
+        <AdminDashboardHeader
+          name={user?.fullName || "Admin"}
+          onMenuPress={() => navigation.openDrawer()}
+          attendanceRate={attendanceRate}
+          showProgress={!loading}
+        />
 
         {loading ? (
-          <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+          <ActivityIndicator size="large" color="#112250" style={styles.loader} />
         ) : (
-          <View style={styles.statsContainer}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Employees</Text>
-              <Text style={styles.cardValue}>{stats.total}</Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Present</Text>
-              <Text style={[styles.cardValue, { color: "#16A34A" }]}>{stats.present}</Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Absent</Text>
-              <Text style={[styles.cardValue, { color: "#EF4444" }]}>{stats.absent}</Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Late</Text>
-              <Text style={[styles.cardValue, { color: "#D97706" }]}>{stats.late}</Text>
-            </View>
+          <View style={styles.statsGrid}>
+            <DashboardStatCard
+              icon="people-outline"
+              iconColor="#112250"
+              iconBg="#EEECFF"
+              value={stats.total}
+              label="Employees"
+            />
+            <DashboardStatCard
+              icon="checkmark-circle-outline"
+              iconColor="#16A34A"
+              iconBg="#DCFCE7"
+              value={stats.present}
+              label="Present"
+            />
+            <DashboardStatCard
+              icon="close-circle-outline"
+              iconColor="#EF4444"
+              iconBg="#FEE2E2"
+              value={stats.absent}
+              label="Absent"
+            />
+            <DashboardStatCard
+              icon="alert-circle-outline"
+              iconColor="#D97706"
+              iconBg="#FEF3C7"
+              value={stats.late}
+              label="Late"
+            />
           </View>
         )}
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-        {QUICK_ACTIONS.map((action) => (
-          <TouchableOpacity
-            key={action.route}
-            style={styles.actionButton}
-            onPress={() => navigation.navigate(action.route)}
-          >
-            <Ionicons name={action.icon} size={18} color="#483bbc" style={{ marginRight: 10 }} />
-            <Text style={styles.actionText}>{action.label}</Text>
-          </TouchableOpacity>
-        ))}
+        <View style={styles.actionsList}>
+          {QUICK_ACTIONS.map((action) => (
+            <TouchableOpacity
+              key={action.route}
+              style={styles.actionCard}
+              onPress={() => navigation.navigate(action.route)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: action.iconBg }]}>
+                <Ionicons name={action.icon} size={20} color={action.iconColor} />
+              </View>
+              <Text style={styles.actionText}>{action.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -117,83 +144,63 @@ export default function AdminDashboard({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    marginHorizontal: 20,
-  },
-
-  welcome: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginLeft: 14,
-  },
-
-  subtitle: {
-    color: "#64748B",
-    marginHorizontal: 20,
-    marginTop: 6,
-    marginBottom: 20,
+    backgroundColor: "#F4F6F8",
   },
 
   loader: {
-    marginTop: 20,
+    marginTop: 40,
     marginBottom: 20,
   },
 
-  statsContainer: {
+  statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-  },
-
-  card: {
-    width: "48%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 3,
-  },
-
-  cardTitle: {
-    color: "#64748B",
-    fontSize: 14,
-  },
-
-  cardValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginTop: 10,
-    color: "#6D5DF6",
+    paddingTop: 20,
   },
 
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
+    color: "#1E1B4B",
     marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 15,
+    marginTop: 6,
+    marginBottom: 14,
   },
 
-  actionButton: {
+  actionsList: {
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
+
+  actionCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#6c5df66d",
-    marginHorizontal: 20,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 12,
-    padding: 18,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+
+  actionIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
 
   actionText: {
-    color: "#483bbc",
+    flex: 1,
+    color: "#1E1B4B",
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 15,
   },
 });

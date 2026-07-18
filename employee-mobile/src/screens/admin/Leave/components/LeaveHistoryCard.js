@@ -24,7 +24,7 @@ export default function LeaveHistoryCard({ leave }) {
     <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.icon}>
-          <Ionicons name="person-outline" size={18} color="#6D5DF6" />
+          <Ionicons name="person-outline" size={18} color="#112250" />
         </View>
 
         <View style={styles.titleBlock}>
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
 
   dateLabel: {
     fontSize: 12,
-    color: "#6D5DF6",
+    color: "#112250",
     fontWeight: "600",
   },
 

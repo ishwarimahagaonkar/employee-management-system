@@ -88,7 +88,6 @@ exports.startTrip = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Start Trip Error:", error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -155,7 +154,6 @@ exports.endTrip = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("End Trip Error:", error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -211,7 +209,6 @@ exports.logMeeting = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Log Meeting Error:", error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -246,7 +243,6 @@ exports.getTodayTravel = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -269,7 +265,6 @@ exports.getTravelHistory = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -331,7 +326,6 @@ exports.getAllTravel = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
         res.status(500).json({
             success: false,
             message: "Server error"

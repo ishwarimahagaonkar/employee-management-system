@@ -79,7 +79,6 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
 
     try {
-        console.log("FULL RESPONSE:", res.data);
         const { email, password } = req.body;
 
         // CHECK REQUIRED FIELDS

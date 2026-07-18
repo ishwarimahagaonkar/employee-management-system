@@ -18,7 +18,6 @@ export default function useAdminTravel() {
       setCompletedTripsCount(data?.completedTripsCount || 0);
       setTrips(data?.trips || []);
     } catch (err) {
-      console.log("Admin travel fetch error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../../api/api.js";
 import DaySelector from "./components/DaySelector";
 import EmployeeReportCard from "./components/EmployeeReportCard";
+import DetailedReportPanel from "./components/DetailedReportPanel";
 
 const EXTRA_HOURS_THRESHOLD_MIN = 17 * 60 + 30; // 5:30 PM
 const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -34,6 +35,7 @@ const toISTDateStr = (isoString) => {
 const todayIST = () => toISTDateStr(new Date());
 
 export default function ReportScreen({ navigation }) {
+  const [mode, setMode] = useState("daily"); // "daily" | "detailed"
   const [selectedDate, setSelectedDate] = useState(todayIST());
 
   const [search, setSearch] = useState("");
@@ -57,7 +59,6 @@ export default function ReportScreen({ navigation }) {
       setLeaves(leaveRes.data?.data || []);
       setTrips(travelRes.data?.data?.trips || []);
     } catch (err) {
-      console.log("Report fetch error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -128,43 +129,66 @@ export default function ReportScreen({ navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      <DaySelector
-        date={selectedDate}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        onSelectDate={setSelectedDate}
-        disableNext={isToday}
-      />
-
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={18} color="#9CA3AF" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search employee..."
-          placeholderTextColor="#9CA3AF"
-          value={search}
-          onChangeText={setSearch}
-        />
+      <View style={styles.modeRow}>
+        <TouchableOpacity
+          style={[styles.modeTab, mode === "daily" && styles.modeTabActive]}
+          onPress={() => setMode("daily")}
+        >
+          <Text style={[styles.modeTabText, mode === "daily" && styles.modeTabTextActive]}>Daily Overview</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeTab, mode === "detailed" && styles.modeTabActive]}
+          onPress={() => setMode("detailed")}
+        >
+          <Text style={[styles.modeTabText, mode === "detailed" && styles.modeTabTextActive]}>
+            Employee Report
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
-      ) : (
-        <FlatList
-          data={filteredRows}
-          keyExtractor={(item) => item.employee._id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<Text style={styles.emptyText}>No employees found</Text>}
-          renderItem={({ item }) => (
-            <EmployeeReportCard
-              employee={item.employee}
-              extraHours={item.extraHours}
-              unpaidLeaveDays={item.unpaidLeaveDays}
-              distanceKm={item.distanceKm}
+      {mode === "daily" ? (
+        <>
+          <DaySelector
+            date={selectedDate}
+            onPrev={handlePrev}
+            onNext={handleNext}
+            onSelectDate={setSelectedDate}
+            disableNext={isToday}
+          />
+
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search employee..."
+              placeholderTextColor="#9CA3AF"
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+          ) : (
+            <FlatList
+              data={filteredRows}
+              keyExtractor={(item) => item.employee._id}
+              contentContainerStyle={styles.list}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={<Text style={styles.emptyText}>No employees found</Text>}
+              renderItem={({ item }) => (
+                <EmployeeReportCard
+                  employee={item.employee}
+                  extraHours={item.extraHours}
+                  unpaidLeaveDays={item.unpaidLeaveDays}
+                  distanceKm={item.distanceKm}
+                />
+              )}
             />
           )}
-        />
+        </>
+      ) : (
+        <DetailedReportPanel employees={employees} />
       )}
     </SafeAreaView>
   );
@@ -189,6 +213,38 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#1E1B4B",
+  },
+
+  modeRow: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  modeTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  modeTabActive: {
+    backgroundColor: "#112250",
+  },
+
+  modeTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+
+  modeTabTextActive: {
+    color: "#fff",
   },
 
   searchBox: {

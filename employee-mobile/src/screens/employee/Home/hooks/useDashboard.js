@@ -45,7 +45,6 @@ export default function useDashboard() {
       const totalKm = travelDays.reduce((sum, day) => sum + (day.totalDistanceKm || 0), 0);
       setTravelKm(totalKm);
     } catch (err) {
-      console.log("Dashboard fetch error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }

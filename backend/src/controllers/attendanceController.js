@@ -44,8 +44,6 @@ const isPunchInLate = (punchInTime, settings) => {
 exports.punchIn = async (req, res) => {
 
   try {
-    console.log("REQ USER:", req.user);
-    console.log("REQ BODY:", req.body);
 
     const { lat, lng, address, photo } = req.body;
 
@@ -110,7 +108,6 @@ exports.punchIn = async (req, res) => {
       attendance,
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };

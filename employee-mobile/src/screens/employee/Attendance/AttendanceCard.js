@@ -10,7 +10,7 @@ export default function AttendanceCard({ date, punchIn, punchOut, status }) {
       {/* Left side with calendar icon */}
       <View style={styles.left}>
         <View style={styles.iconCircle}>
-          <Ionicons name="calendar-outline" size={22} color="#6C63FF" />
+          <Ionicons name="calendar-outline" size={22} color="#797878" />
         </View>
         <View>
           <Text style={styles.dateText}>{date}</Text>
@@ -29,7 +29,7 @@ export default function AttendanceCard({ date, punchIn, punchOut, status }) {
         <Text
           style={[
             styles.badgeText,
-            { color: status === "late" ? "#FF5B5B" : "#6C63FF" },
+            { color: status === "late" ? "#FF5B5B" : "#112250" },
           ]}
         >
           {status.toUpperCase()}

@@ -40,7 +40,7 @@ export default function BottomTabNavigator() {
           );
         },
 
-        tabBarActiveTintColor: "#6C63FF",
+        tabBarActiveTintColor: "#112250",
         tabBarInactiveTintColor: "#6B7280",
 
         tabBarStyle: {

@@ -17,12 +17,12 @@ export default function EmployeeDashboard() {
         <DashboardHeader name={fullName || user?.fullName} checkedIn={checkedIn} />
 
         {loading ? (
-          <ActivityIndicator size="large" color="#6D5DF6" style={styles.loader} />
+          <ActivityIndicator size="large" color="#112250" style={styles.loader} />
         ) : (
           <View style={styles.statsGrid}>
             <StatCard
               icon="calendar-outline"
-              iconColor="#6D5DF6"
+              iconColor="#112250"
               iconBg="#EEECFF"
               value={presentDays}
               label="Present Days"
@@ -43,7 +43,7 @@ export default function EmployeeDashboard() {
             />
             <StatCard
               icon="location-outline"
-              iconColor="#7C3AED"
+              iconColor="#112250"
               iconBg="#EDE9FE"
               value={travelKm.toFixed(1)}
               label="Travel (km)"

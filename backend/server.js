@@ -22,6 +22,8 @@ const leaveRoutes = require("./src/routes/leaveRoutes");
 
 const settingsRoutes = require("./src/routes/settingsRoutes");
 
+const reportRoutes = require("./src/routes/reportRoutes");
+
 dotenv.config();
 
 connectDB();
@@ -54,9 +56,10 @@ app.use("/api/leave", leaveRoutes);
 
 app.use("/api/settings", settingsRoutes);
 
+app.use("/api/report", reportRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
 });

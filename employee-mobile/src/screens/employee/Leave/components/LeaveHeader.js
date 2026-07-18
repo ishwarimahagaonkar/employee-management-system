@@ -7,7 +7,7 @@ import PrimaryButton from "./PrimaryButton";
 export default function LeaveHeader({ balances, onApplyPress }) {
   return (
     <LinearGradient
-      colors={["#22D3EE", "#3B82F6"]}
+      colors={["#112250", "#112250"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.header}

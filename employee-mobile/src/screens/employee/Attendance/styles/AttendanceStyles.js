@@ -7,7 +7,7 @@ const styles = StyleSheet.create({
   },
 
   headerCard: {
-    backgroundColor: "#6C63FF",
+    backgroundColor: "#112250",
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 30,
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
 
   punchText: {
-    color: "#6C63FF",
+    color: "#112250",
     fontWeight: "700",
     fontSize: 18,
   },
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   },
 
   badgeText: {
-    color: "#6C63FF",
+    color: "#112250",
     fontWeight: "600",
   },
 });

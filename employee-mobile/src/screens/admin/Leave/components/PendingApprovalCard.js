@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   approveBtn: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#6D5DF6",
+    backgroundColor: "#112250",
     borderRadius: 24,
     paddingVertical: 13,
     alignItems: "center",
