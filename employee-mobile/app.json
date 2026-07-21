@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "StaffTrack",
-    "slug": "StaffTrack",
+    "slug": "employee-management-system",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -34,6 +34,12 @@
       "eas": {
         "projectId": "f8e38dce-bf74-4651-981d-49bc63043588"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f8e38dce-bf74-4651-981d-49bc63043588"
     }
   }
 }
