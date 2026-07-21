@@ -54,6 +54,7 @@ export default function ReportPreview({ report }) {
     generatedAt,
     generatedBy,
     attendanceSummary: a,
+    holidaySummary,
     leaveSummary,
     travelSummary,
     payrollImpact: p,
@@ -83,7 +84,22 @@ export default function ReportPreview({ report }) {
         <Row label="Overtime Hours" value={a.overtimeHours} />
       </SectionCard>
 
-      <SectionCard title="3. Leave Summary">
+      <SectionCard title="3. Holidays">
+        {holidaySummary.records.length === 0 ? (
+          <Text style={styles.emptyText}>No holidays in this period.</Text>
+        ) : (
+          holidaySummary.records.map((h, idx) => (
+            <View key={idx} style={styles.row}>
+              <Text style={styles.rowLabel}>{h.date}</Text>
+              <Text style={styles.rowValue}>{h.name}</Text>
+            </View>
+          ))
+        )}
+        <View style={styles.divider} />
+        <Row label="Total Holidays (excluded from working days)" value={holidaySummary.count} />
+      </SectionCard>
+
+      <SectionCard title="4. Leave Summary">
         {leaveSummary.records.length === 0 ? (
           <Text style={styles.emptyText}>No leave records in this period.</Text>
         ) : (
@@ -106,7 +122,7 @@ export default function ReportPreview({ report }) {
         <Row label="Total Pending/Rejected Days" value={leaveSummary.totalPendingOrRejectedDays} />
       </SectionCard>
 
-      <SectionCard title="4. Travel Summary">
+      <SectionCard title="5. Travel Summary">
         {travelSummary.records.length === 0 ? (
           <Text style={styles.emptyText}>No travel records in this period.</Text>
         ) : (
@@ -114,7 +130,7 @@ export default function ReportPreview({ report }) {
             <View key={idx} style={styles.travelRow}>
               <Text style={styles.travelDate}>{t.date}</Text>
               <Text style={styles.travelDestination}>{t.destination}</Text>
-              <Text style={styles.travelMeta}>Purpose: {t.purpose}</Text>
+              <Text style={styles.travelMeta}>Purpose: {t.purpose} • Distance: {t.distanceKm} km</Text>
               <Text style={styles.travelMeta}>
                 Approval: {t.approvalStatus} • Expense: {t.expenseAmount}
               </Text>
@@ -122,10 +138,11 @@ export default function ReportPreview({ report }) {
           ))
         )}
         <View style={styles.divider} />
+        <Row label="Total KMs Travelled" value={`${travelSummary.totalKmTravelled} km`} />
         <Row label="Total Approved Travel Claims" value={travelSummary.totalApprovedTravelClaims} />
       </SectionCard>
 
-      <SectionCard title="5. Payroll Impact Summary">
+      <SectionCard title="6. Payroll Impact Summary">
         <Row label="Total Payable Days" value={p.totalPayableDays} />
         <Row label="Total Unpaid Leave/Absence Days" value={p.totalUnpaidLeaveAbsenceDays} />
         <Row label="Approved Travel Reimbursement" value={p.approvedTravelReimbursement} />

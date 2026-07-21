@@ -7,26 +7,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api/api.js";
 
-import AdminDashboard from "../screens/admin/AdminDashboard";
-import EmployeesScreen from "../screens/admin/Employees/EmployeesScreen";
-import AttendanceScreen from "../screens/admin/Attendance/AttendanceScreen";
-import TravelStackNavigator from "../screens/admin/Travel/TravelStackNavigator";
-import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
-import ReportScreen from "../screens/admin/Report/ReportScreen";
-import HolidaysScreen from "../screens/admin/Holidays/HolidaysScreen";
-import SettingsScreen from "../screens/admin/Settings/SettingsScreen";
+import SuperAdminDashboard from "../screens/superadmin/Dashboard/SuperAdminDashboard";
+import CompaniesStackNavigator from "../screens/superadmin/Companies/CompaniesStackNavigator";
 
 const Drawer = createDrawerNavigator();
 
-const ALL_NAV_ITEMS = [
+const NAV_ITEMS = [
   { name: "Dashboard", label: "Dashboard", icon: "grid-outline" },
-  { name: "Employees", label: "Employees", icon: "people-outline" },
-  { name: "Attendance", label: "Attendance", icon: "time-outline" },
-  { name: "Travel", label: "Travel", icon: "location-outline", premiumOnly: true },
-  { name: "Leave", label: "Leave", icon: "calendar-outline" },
-  { name: "Holidays", label: "Holidays", icon: "sunny-outline" },
-  { name: "Report", label: "Report", icon: "document-text-outline", premiumOnly: true },
-  { name: "Settings", label: "Settings", icon: "settings-outline" },
+  { name: "Companies", label: "Companies", icon: "business-outline" },
 ];
 
 function initials(name) {
@@ -40,8 +28,6 @@ function initials(name) {
 
 function CustomDrawerContent(props) {
   const { user, logout } = useContext(AuthContext);
-  const isPremium = user?.company?.plan !== "Standard";
-  const navItems = ALL_NAV_ITEMS.filter((item) => !item.premiumOnly || isPremium);
 
   const handleLogout = async () => {
     try {
@@ -68,11 +54,11 @@ function CustomDrawerContent(props) {
           <Text style={styles.avatarText}>{initials(user?.fullName)}</Text>
         </View>
         <Text style={styles.name}>{user?.fullName}</Text>
-        <Text style={styles.role}>Administrator</Text>
+        <Text style={styles.role}>Super Admin</Text>
       </View>
 
       <DrawerContentScrollView {...props} contentContainerStyle={styles.itemsList}>
-        {navItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const focused = props.state.routeNames[props.state.index] === item.name;
           return (
             <TouchableOpacity
@@ -102,23 +88,14 @@ function CustomDrawerContent(props) {
   );
 }
 
-export default function AdminDrawerNavigator() {
-  const { user } = useContext(AuthContext);
-  const isPremium = user?.company?.plan !== "Standard";
-
+export default function SuperAdminDrawerNavigator() {
   return (
     <Drawer.Navigator
       screenOptions={{ headerShown: false, drawerType: "front" }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
-      <Drawer.Screen name="Dashboard" component={AdminDashboard} />
-      <Drawer.Screen name="Employees" component={EmployeesScreen} />
-      <Drawer.Screen name="Attendance" component={AttendanceScreen} />
-      {isPremium && <Drawer.Screen name="Travel" component={TravelStackNavigator} />}
-      <Drawer.Screen name="Leave" component={LeaveScreen} />
-      <Drawer.Screen name="Holidays" component={HolidaysScreen} />
-      {isPremium && <Drawer.Screen name="Report" component={ReportScreen} />}
-      <Drawer.Screen name="Settings" component={SettingsScreen} />
+      <Drawer.Screen name="Dashboard" component={SuperAdminDashboard} />
+      <Drawer.Screen name="Companies" component={CompaniesStackNavigator} />
     </Drawer.Navigator>
   );
 }

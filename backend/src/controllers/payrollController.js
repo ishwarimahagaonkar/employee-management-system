@@ -8,7 +8,7 @@ exports.calculateMonthlySalary = async (req, res) => {
 
         const employee = await User.findById(userId);
 
-        if (!employee) {
+        if (!employee || String(employee.companyId ?? null) !== String(req.user.companyId ?? null)) {
             return res.status(404).json({
                 message: "Employee not found"
             });

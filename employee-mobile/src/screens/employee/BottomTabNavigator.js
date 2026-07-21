@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 
@@ -7,10 +7,14 @@ import AttendanceScreen from "./Attendance/AttendanceScreen";
 import TravelScreen from "./Travel/TravelScreen";
 import LeaveScreen from "./Leave/LeaveScreen";
 import ProfileScreen from "./ProfileScreen";
+import { AuthContext } from "../../context/AuthContext";
 
 const Tab = createBottomTabNavigator();
 
 export default function BottomTabNavigator() {
+  const { user } = useContext(AuthContext);
+  const isPremium = user?.company?.plan !== "Standard";
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -68,10 +72,12 @@ export default function BottomTabNavigator() {
         component={AttendanceScreen}
       />
 
-      <Tab.Screen
-        name="Travel"
-        component={TravelScreen}
-      />
+      {isPremium && (
+        <Tab.Screen
+          name="Travel"
+          component={TravelScreen}
+        />
+      )}
 
       <Tab.Screen
         name="Leave"

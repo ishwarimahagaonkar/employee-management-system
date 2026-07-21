@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const settingsSchema = new mongoose.Schema(
     {
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+            default: null,
+        },
         companyName: {
             type: String,
             default: "Obsidian.dev",
@@ -51,6 +56,19 @@ const settingsSchema = new mongoose.Schema(
         halfDayHours: {
             type: Number,
             default: 4,
+        },
+
+        // Yearly paid leave allotment per employee.
+        paidLeaveAllotment: {
+            type: Number,
+            default: 12,
+        },
+
+        // Last year the default national holidays were auto-seeded for this
+        // company. Prevents re-adding defaults an admin deliberately deleted.
+        holidaySeedYear: {
+            type: Number,
+            default: null,
         },
     },
     { timestamps: true }

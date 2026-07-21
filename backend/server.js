@@ -6,8 +6,6 @@ const connectDB = require("./src/config/db");
 
 const authRoutes = require("./src/routes/authRoutes");
 
-const testRoutes = require("./src/routes/testRoutes");
-
 const employeeRoutes = require("./src/routes/employeeRoutes");
 
 const attendanceRoutes = require("./src/routes/attendanceRoutes");
@@ -24,6 +22,10 @@ const settingsRoutes = require("./src/routes/settingsRoutes");
 
 const reportRoutes = require("./src/routes/reportRoutes");
 
+const companyRoutes = require("./src/routes/companyRoutes");
+
+const holidayRoutes = require("./src/routes/holidayRoutes");
+
 dotenv.config();
 
 connectDB();
@@ -35,8 +37,6 @@ app.use(express.json({limit:"10mb"}));
 app.use(express.urlencoded({limit:"10mb", extended: true}));
 
 app.use("/api/auth", authRoutes);
-
-app.use("/api/test", testRoutes);
 
 app.use("/api/employees", employeeRoutes);
 
@@ -57,6 +57,10 @@ app.use("/api/leave", leaveRoutes);
 app.use("/api/settings", settingsRoutes);
 
 app.use("/api/report", reportRoutes);
+
+app.use("/api/companies", companyRoutes);
+
+app.use("/api/holidays", holidayRoutes);
 
 
 const PORT = process.env.PORT || 5000;

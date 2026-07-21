@@ -4,7 +4,7 @@ const {
     generateSalarySlip
 } = require("../controllers/salarySlipController");
 
-const { protect, adminOnly } = require("../middleware/authMiddleware");
+const { protect, adminOnly, restrictToPremium } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -13,6 +13,7 @@ router.get(
     "/generate",
     protect,
     adminOnly,
+    restrictToPremium,
     generateSalarySlip
 );
 

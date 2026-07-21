@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const Travel = require("../models/Travel");
+const Holiday = require("../models/Holiday");
 
 const NOT_AVAILABLE = "Not available";
 
@@ -36,7 +37,7 @@ function isWeekday(dateStr) {
    BUILD REPORT DATA
    Shared by the JSON preview endpoint and all three export formats.
 ========================= */
-async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
+async function buildEmployeeReport({ userId, startDate, endDate, adminName, companyId }) {
     if (!userId || !startDate || !endDate) {
         const err = new Error("userId, startDate and endDate are required");
         err.status = 400;
@@ -49,15 +50,15 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
         throw err;
     }
 
-    const employee = await User.findById(userId).select("empID fullName department designation");
+    const employee = await User.findById(userId).select("empID fullName department designation companyId");
 
-    if (!employee || employee.role === "admin") {
+    if (!employee || employee.role === "admin" || String(employee.companyId ?? null) !== String(companyId ?? null)) {
         const err = new Error("Employee not found");
         err.status = 404;
         throw err;
     }
 
-    const [attendanceRecords, leaveRecords, travelRecords] = await Promise.all([
+    const [attendanceRecords, leaveRecords, travelRecords, holidayRecords] = await Promise.all([
         Attendance.find({ userId, date: { $gte: startDate, $lte: endDate } }),
         Leave.find({
             userId,
@@ -65,6 +66,7 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
             endDate: { $gte: startDate },
         }).sort({ startDate: 1 }),
         Travel.find({ userId, date: { $gte: startDate, $lte: endDate } }).sort({ date: 1 }),
+        Holiday.find({ companyId, date: { $gte: startDate, $lte: endDate } }).sort({ date: 1 }),
     ]);
 
     const attendanceByDate = new Map(attendanceRecords.map((a) => [a.date, a]));
@@ -74,7 +76,11 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
     const approvedLeaveOnDay = (dateStr) =>
         approvedLeaves.find((l) => l.startDate <= dateStr && l.endDate >= dateStr);
 
-    const workingDates = eachDateStr(startDate, endDate).filter(isWeekday);
+    const holidayDateSet = new Set(holidayRecords.map((h) => h.date));
+
+    const workingDates = eachDateStr(startDate, endDate)
+        .filter(isWeekday)
+        .filter((dateStr) => !holidayDateSet.has(dateStr));
 
     let presentDays = 0;
     let lateArrivals = 0;
@@ -138,11 +144,16 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
                     trip.meetingDetails?.customerName ||
                     NOT_AVAILABLE,
                 purpose: trip.purpose || NOT_AVAILABLE,
+                distanceKm: trip.distanceKm || 0,
                 approvalStatus: NOT_AVAILABLE,
                 expenseAmount: NOT_AVAILABLE,
             });
         });
     });
+
+    const totalKmTravelled = Number(
+        travelEntries.reduce((sum, t) => sum + (t.distanceKm || 0), 0).toFixed(1)
+    );
 
     const totalPayableDays = totalWorkingDays - unpaidLeaveWorkingDays - absentDays;
 
@@ -181,6 +192,11 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
             attendancePercentage,
         },
 
+        holidaySummary: {
+            count: holidayRecords.length,
+            records: holidayRecords.map((h) => ({ date: h.date, name: h.name })),
+        },
+
         leaveSummary: {
             records: leaveRecords.map((l) => ({
                 leaveType: l.leaveType,
@@ -197,6 +213,7 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName }) {
 
         travelSummary: {
             records: travelEntries,
+            totalKmTravelled,
             totalApprovedTravelClaims: NOT_AVAILABLE,
         },
 
@@ -250,6 +267,16 @@ async function buildExcelBuffer(report) {
     ]);
     attSheet.getRow(1).font = { bold: true };
 
+    const holidaySheet = workbook.addWorksheet("Holidays");
+    holidaySheet.columns = [
+        { header: "Date", key: "date", width: 14 },
+        { header: "Holiday", key: "name", width: 30 },
+    ];
+    report.holidaySummary.records.forEach((h) => holidaySheet.addRow(h));
+    holidaySheet.getRow(1).font = { bold: true };
+    holidaySheet.addRow([]);
+    holidaySheet.addRow(["Total Holidays (excluded from working days)", report.holidaySummary.count]);
+
     const leaveSheet = workbook.addWorksheet("Leave Summary");
     leaveSheet.columns = [
         { header: "Leave Type", key: "leaveType", width: 14 },
@@ -271,12 +298,14 @@ async function buildExcelBuffer(report) {
         { header: "Date", key: "date", width: 14 },
         { header: "Destination", key: "destination", width: 32 },
         { header: "Purpose", key: "purpose", width: 26 },
+        { header: "Distance (km)", key: "distanceKm", width: 14 },
         { header: "Approval Status", key: "approvalStatus", width: 18 },
         { header: "Expense Amount", key: "expenseAmount", width: 18 },
     ];
     report.travelSummary.records.forEach((t) => travelSheet.addRow(t));
     travelSheet.getRow(1).font = { bold: true };
     travelSheet.addRow([]);
+    travelSheet.addRow(["Total KMs Travelled", report.travelSummary.totalKmTravelled]);
     travelSheet.addRow(["Total Approved Travel Claims", report.travelSummary.totalApprovedTravelClaims]);
 
     const payrollSheet = workbook.addWorksheet("Payroll Impact");
@@ -337,6 +366,15 @@ function buildCsvString(report) {
     out += csvRow(["Attendance Percentage", `${a.attendancePercentage}%`]);
     out += csvRow([]);
 
+    out += csvRow(["HOLIDAYS (excluded from working days)"]);
+    out += csvRow(["Date", "Holiday"]);
+    report.holidaySummary.records.forEach((h) => {
+        out += csvRow([h.date, h.name]);
+    });
+    out += csvRow([]);
+    out += csvRow(["Total Holidays", report.holidaySummary.count]);
+    out += csvRow([]);
+
     out += csvRow(["LEAVE SUMMARY"]);
     out += csvRow(["Leave Type", "Start Date", "End Date", "Days", "Status"]);
     report.leaveSummary.records.forEach((l) => {
@@ -350,11 +388,12 @@ function buildCsvString(report) {
     out += csvRow([]);
 
     out += csvRow(["TRAVEL SUMMARY"]);
-    out += csvRow(["Date", "Destination", "Purpose", "Approval Status", "Expense Amount"]);
+    out += csvRow(["Date", "Destination", "Purpose", "Distance (km)", "Approval Status", "Expense Amount"]);
     report.travelSummary.records.forEach((t) => {
-        out += csvRow([t.date, t.destination, t.purpose, t.approvalStatus, t.expenseAmount]);
+        out += csvRow([t.date, t.destination, t.purpose, t.distanceKm, t.approvalStatus, t.expenseAmount]);
     });
     out += csvRow([]);
+    out += csvRow(["Total KMs Travelled", report.travelSummary.totalKmTravelled]);
     out += csvRow(["Total Approved Travel Claims", report.travelSummary.totalApprovedTravelClaims]);
     out += csvRow([]);
 
@@ -401,7 +440,20 @@ function writePdfReport(doc, report) {
     doc.text(`Attendance Percentage: ${a.attendancePercentage}%`);
     doc.moveDown();
 
-    doc.fontSize(12).text("3. Leave Summary", { underline: true });
+    doc.fontSize(12).text("3. Holidays", { underline: true });
+    doc.fontSize(10);
+    if (report.holidaySummary.records.length === 0) {
+        doc.text("No holidays in this period.");
+    } else {
+        report.holidaySummary.records.forEach((h) => {
+            doc.text(`${h.date}  |  ${h.name}`);
+        });
+    }
+    doc.moveDown(0.5);
+    doc.text(`Total Holidays (excluded from working days): ${report.holidaySummary.count}`);
+    doc.moveDown();
+
+    doc.fontSize(12).text("4. Leave Summary", { underline: true });
     doc.fontSize(10);
     if (report.leaveSummary.records.length === 0) {
         doc.text("No leave records in this period.");
@@ -417,21 +469,22 @@ function writePdfReport(doc, report) {
     doc.text(`Total Pending/Rejected Leave Days: ${report.leaveSummary.totalPendingOrRejectedDays}`);
     doc.moveDown();
 
-    doc.fontSize(12).text("4. Travel Summary", { underline: true });
+    doc.fontSize(12).text("5. Travel Summary", { underline: true });
     doc.fontSize(10);
     if (report.travelSummary.records.length === 0) {
         doc.text("No travel records in this period.");
     } else {
         report.travelSummary.records.forEach((t) => {
-            doc.text(`${t.date}  |  ${t.destination}  |  ${t.purpose}  |  Approval: ${t.approvalStatus}  |  Expense: ${t.expenseAmount}`);
+            doc.text(`${t.date}  |  ${t.destination}  |  ${t.purpose}  |  ${t.distanceKm} km  |  Approval: ${t.approvalStatus}  |  Expense: ${t.expenseAmount}`);
         });
     }
     doc.moveDown(0.5);
+    doc.text(`Total KMs Travelled: ${report.travelSummary.totalKmTravelled} km`);
     doc.text(`Total Approved Travel Claims: ${report.travelSummary.totalApprovedTravelClaims}`);
     doc.moveDown();
 
     const p = report.payrollImpact;
-    doc.fontSize(12).text("5. Payroll Impact Summary", { underline: true });
+    doc.fontSize(12).text("6. Payroll Impact Summary", { underline: true });
     doc.fontSize(10);
     doc.text(`Total Payable Days: ${p.totalPayableDays}`);
     doc.text(`Total Unpaid Leave/Absence Days: ${p.totalUnpaidLeaveAbsenceDays}`);
@@ -459,6 +512,7 @@ exports.getEmployeeReport = async (req, res) => {
             startDate,
             endDate,
             adminName: req.user.fullName,
+            companyId: req.user.companyId,
         });
 
         res.status(200).json({ success: true, data: report });
@@ -483,6 +537,7 @@ exports.exportEmployeeReport = async (req, res) => {
             startDate,
             endDate,
             adminName: req.user.fullName,
+            companyId: req.user.companyId,
         });
 
         const filenameBase = `report-${report.employee.employeeId}-${startDate}_to_${endDate}`;

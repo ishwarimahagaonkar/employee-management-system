@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../../../api/api.js";
 
-const PAID_ALLOTMENT = 12;
+const DEFAULT_PAID_ALLOTMENT = 12;
 
 export default function useDashboard() {
   const [loading, setLoading] = useState(true);
@@ -9,7 +9,7 @@ export default function useDashboard() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [presentDays, setPresentDays] = useState(0);
   const [lateMarks, setLateMarks] = useState(0);
-  const [leaveBalance, setLeaveBalance] = useState(PAID_ALLOTMENT);
+  const [leaveBalance, setLeaveBalance] = useState(DEFAULT_PAID_ALLOTMENT);
   const [travelKm, setTravelKm] = useState(0);
 
   const fetchDashboard = async () => {
@@ -18,12 +18,13 @@ export default function useDashboard() {
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
-      const [profileRes, todayRes, monthlyRes, leaveRes, travelRes] = await Promise.all([
+      const [profileRes, todayRes, monthlyRes, leaveRes, travelRes, settingsRes] = await Promise.all([
         api.get("/employees/me"),
         api.get("/attendance/today"),
         api.get(`/attendance/monthly?month=${month}&year=${year}`),
         api.get("/leave/my-leaves"),
         api.get("/travel/history"),
+        api.get("/settings"),
       ]);
 
       setFullName(profileRes.data?.fullName || "");
@@ -39,7 +40,11 @@ export default function useDashboard() {
       const paidDaysTaken = leaves
         .filter((l) => l.leaveType === "Paid" && l.status === "Approved")
         .reduce((sum, l) => sum + l.totalDays, 0);
-      setLeaveBalance(Math.max(PAID_ALLOTMENT - paidDaysTaken, 0));
+
+      const allotment = settingsRes.data?.data?.paidLeaveAllotment;
+      const paidAllotment =
+        typeof allotment === "number" && allotment >= 0 ? allotment : DEFAULT_PAID_ALLOTMENT;
+      setLeaveBalance(Math.max(paidAllotment - paidDaysTaken, 0));
 
       const travelDays = travelRes.data?.data || [];
       const totalKm = travelDays.reduce((sum, day) => sum + (day.totalDistanceKm || 0), 0);
