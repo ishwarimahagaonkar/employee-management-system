@@ -1,5 +1,9 @@
 const User = require("../models/User");
+const Company = require("../models/Company");
 const bcrypt = require("bcryptjs");
+
+// Compares two companyId values (handles null/undefined/ObjectId uniformly)
+const sameCompany = (a, b) => String(a ?? null) === String(b ?? null);
 
 
 // ==========================
@@ -45,6 +49,7 @@ exports.createEmployee = async (req, res) => {
             role: role || "employee",
             department,
             designation,
+            companyId: req.user.companyId,
         });
 
         // Remove password before sending response
@@ -69,7 +74,7 @@ exports.createEmployee = async (req, res) => {
 // ==========================
 exports.getAllEmployees = async (req, res) => {
     try {
-        const employees = await User.find({ role: "employee" })
+        const employees = await User.find({ role: "employee", companyId: req.user.companyId })
             .select("-password")
             .sort({ createdAt: -1 });
 
@@ -91,7 +96,18 @@ exports.getAllEmployees = async (req, res) => {
 // ==========================
 exports.getMyProfile = async (req, res) => {
     try {
-        return res.status(200).json(req.user);
+        let company = null;
+
+        if (req.user.companyId) {
+            company = await Company.findById(req.user.companyId).select("subscription.plan");
+        }
+
+        const userResponse = {
+            ...req.user.toObject(),
+            company: company ? { plan: company.subscription.plan } : null,
+        };
+
+        return res.status(200).json(userResponse);
 
     } catch (error) {
         return res.status(500).json({
@@ -108,7 +124,7 @@ exports.getEmployeeById = async (req, res) => {
     try {
         const employee = await User.findById(req.params.id).select("-password");
 
-        if (!employee || employee.role !== "employee") {
+        if (!employee || employee.role !== "employee" || !sameCompany(employee.companyId, req.user.companyId)) {
             return res.status(404).json({
                 message: "Employee not found",
             });
@@ -131,7 +147,7 @@ exports.updateEmployee = async (req, res) => {
     try {
         const employee = await User.findById(req.params.id);
 
-        if (!employee || employee.role !== "employee") {
+        if (!employee || employee.role !== "employee" || !sameCompany(employee.companyId, req.user.companyId)) {
             return res.status(404).json({
                 message: "Employee not found",
             });
@@ -168,7 +184,7 @@ exports.deleteEmployee = async (req, res) => {
     try {
         const employee = await User.findById(req.params.id);
 
-        if (!employee || employee.role !== "employee") {
+        if (!employee || employee.role !== "employee" || !sameCompany(employee.companyId, req.user.companyId)) {
             return res.status(404).json({
                 message: "Employee not found",
             });

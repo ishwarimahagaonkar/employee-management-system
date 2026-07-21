@@ -12,8 +12,9 @@ import api from "../../../api/api.js";
 import LeaveHeader from "./components/LeaveHeader";
 import LeaveForm from "./components/LeaveForm";
 import LeaveHistoryCard from "./components/LeaveHistoryCard";
+import HolidayList from "./components/HolidayList";
 
-const PAID_ALLOTMENT = 12;
+const DEFAULT_PAID_ALLOTMENT = 12;
 
 const calculateDays = (startISO, endISO) => {
   const diff = new Date(endISO).getTime() - new Date(startISO).getTime();
@@ -22,6 +23,8 @@ const calculateDays = (startISO, endISO) => {
 
 export default function LeaveScreen() {
   const [leaves, setLeaves] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [paidAllotment, setPaidAllotment] = useState(DEFAULT_PAID_ALLOTMENT);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,8 +45,29 @@ export default function LeaveScreen() {
     }
   };
 
+  const fetchHolidays = async () => {
+    try {
+      const res = await api.get("/holidays");
+      setHolidays(res.data.holidays || []);
+    } catch (err) {
+    }
+  };
+
+  const fetchLeaveSettings = async () => {
+    try {
+      const res = await api.get("/settings");
+      const allotment = res.data?.data?.paidLeaveAllotment;
+      if (typeof allotment === "number" && allotment >= 0) {
+        setPaidAllotment(allotment);
+      }
+    } catch (err) {
+    }
+  };
+
   useEffect(() => {
     fetchLeaves();
+    fetchHolidays();
+    fetchLeaveSettings();
   }, []);
 
   const daysTaken = (type) =>
@@ -54,7 +78,7 @@ export default function LeaveScreen() {
   // Paid leave is a capped yearly allotment; unpaid leave has no cap,
   // so its card shows days taken instead of a remaining balance.
   const balances = {
-    Paid: Math.max(PAID_ALLOTMENT - daysTaken("Paid"), 0),
+    Paid: Math.max(paidAllotment - daysTaken("Paid"), 0),
     Unpaid: daysTaken("Unpaid"),
   };
 
@@ -102,6 +126,8 @@ export default function LeaveScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchLeaves();
+    fetchHolidays();
+    fetchLeaveSettings();
   };
 
   return (
@@ -127,6 +153,8 @@ export default function LeaveScreen() {
           />
         ) : (
           <View style={styles.historySection}>
+            <HolidayList holidays={holidays} />
+
             <Text style={styles.historyTitle}>Leave History</Text>
 
             {loading ? (

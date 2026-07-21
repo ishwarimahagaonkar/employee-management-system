@@ -43,6 +43,7 @@ exports.startTrip = async (req, res) => {
         if (!travel) {
             travel = new Travel({
                 userId,
+                companyId: req.user.companyId,
                 date,
                 trips: []
             });
@@ -277,7 +278,7 @@ exports.getTravelHistory = async (req, res) => {
 ========================= */
 exports.getAllTravel = async (req, res) => {
     try {
-        const records = await Travel.find({})
+        const records = await Travel.find({ companyId: req.user.companyId ?? null })
             .populate("userId", "fullName email department designation")
             .sort({ date: -1 });
 

@@ -1,11 +1,13 @@
 const Settings = require("../models/Settings");
 
-// A single settings document represents the whole organization's config.
-const getOrCreateSettings = async () => {
-    let settings = await Settings.findOne();
+// Each company has its own settings document (companyId: null covers
+// pre-multi-tenant deployments that never had a company assigned).
+const getOrCreateSettings = async (companyId) => {
+    const scopedCompanyId = companyId ?? null;
+    let settings = await Settings.findOne({ companyId: scopedCompanyId });
 
     if (!settings) {
-        settings = await Settings.create({});
+        settings = await Settings.create({ companyId: scopedCompanyId });
     }
 
     return settings;
@@ -18,7 +20,7 @@ const getOrCreateSettings = async () => {
  */
 exports.getSettings = async (req, res) => {
     try {
-        const settings = await getOrCreateSettings();
+        const settings = await getOrCreateSettings(req.user.companyId);
 
         res.status(200).json({
             success: true,
@@ -39,7 +41,7 @@ exports.getSettings = async (req, res) => {
  */
 exports.updateSettings = async (req, res) => {
     try {
-        const settings = await getOrCreateSettings();
+        const settings = await getOrCreateSettings(req.user.companyId);
 
         const allowedFields = [
             "companyName",
@@ -54,6 +56,7 @@ exports.updateSettings = async (req, res) => {
             "workStartTime",
             "workEndTime",
             "halfDayHours",
+            "paidLeaveAllotment",
         ];
 
         allowedFields.forEach((field) => {

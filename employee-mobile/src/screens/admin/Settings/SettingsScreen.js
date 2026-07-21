@@ -28,6 +28,7 @@ const emptyForm = {
   workStartTime: "",
   workEndTime: "",
   halfDayHours: "",
+  paidLeaveAllotment: "",
 };
 
 const formFromSettings = (s = {}) => ({
@@ -43,6 +44,7 @@ const formFromSettings = (s = {}) => ({
   workStartTime: s.workStartTime || "",
   workEndTime: s.workEndTime || "",
   halfDayHours: String(s.halfDayHours ?? ""),
+  paidLeaveAllotment: String(s.paidLeaveAllotment ?? ""),
 });
 
 export default function SettingsScreen({ navigation }) {
@@ -93,6 +95,7 @@ export default function SettingsScreen({ navigation }) {
         workStartTime: form.workStartTime,
         workEndTime: form.workEndTime,
         halfDayHours: parseFloat(form.halfDayHours) || 0,
+        paidLeaveAllotment: parseInt(form.paidLeaveAllotment, 10) || 0,
       });
       const next = formFromSettings(res.data?.data);
       setForm(next);
@@ -265,6 +268,22 @@ export default function SettingsScreen({ navigation }) {
             label="Half Day Hours"
             value={form.halfDayHours}
             onChangeText={update("halfDayHours")}
+            keyboardType="numeric"
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          icon="calendar-outline"
+          iconColor="#16A34A"
+          iconBg="#DCFCE7"
+          title="Leave Rules"
+          subtitle="Configure leave policies"
+        >
+          <SettingsField
+            editable={isEditing}
+            label="Paid Leaves Per Year"
+            value={form.paidLeaveAllotment}
+            onChangeText={update("paidLeaveAllotment")}
             keyboardType="numeric"
           />
         </SettingsCard>

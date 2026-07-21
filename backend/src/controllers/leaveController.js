@@ -1,5 +1,24 @@
 const Leave = require("../models/Leave");
 
+// Strictly validates a "YYYY-MM-DD" string and returns a UTC-anchored Date,
+// or null if the string is missing / malformed / not a real calendar date.
+const parseDateStr = (value) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return null;
+    }
+    const date = new Date(`${value}T00:00:00Z`);
+    // Round-trip guards against impossible dates like 2026-02-31 (which JS
+    // would otherwise roll forward to March).
+    if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+        return null;
+    }
+    return date;
+};
+
+// Inclusive day count between two "YYYY-MM-DD" dates.
+const inclusiveDayCount = (start, end) =>
+    Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+
 /* =========================
    APPLY LEAVE
 ========================= */
@@ -7,21 +26,67 @@ exports.applyLeave = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const {
-            leaveType,
-            startDate,
-            endDate,
-            totalDays,
-            reason
-        } = req.body;
+        const { leaveType, startDate, endDate, reason } = req.body;
+
+        // --- Required fields ---
+        if (!leaveType || !startDate || !endDate || !reason || !reason.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Leave type, start date, end date and reason are required",
+            });
+        }
+
+        if (!["Paid", "Unpaid"].includes(leaveType)) {
+            return res.status(400).json({
+                success: false,
+                message: "Leave type must be 'Paid' or 'Unpaid'",
+            });
+        }
+
+        // --- Date validation ---
+        const start = parseDateStr(startDate);
+        const end = parseDateStr(endDate);
+
+        if (!start || !end) {
+            return res.status(400).json({
+                success: false,
+                message: "Dates must be valid calendar dates in YYYY-MM-DD format",
+            });
+        }
+
+        if (end < start) {
+            return res.status(400).json({
+                success: false,
+                message: "End date cannot be before start date",
+            });
+        }
+
+        // --- Overlap check: reject if any non-rejected leave intersects the range ---
+        const overlapping = await Leave.findOne({
+            userId,
+            status: { $ne: "Rejected" },
+            startDate: { $lte: endDate },
+            endDate: { $gte: startDate },
+        });
+
+        if (overlapping) {
+            return res.status(409).json({
+                success: false,
+                message: "You already have a leave request overlapping these dates",
+            });
+        }
+
+        // --- totalDays is computed server-side, never trusted from the client ---
+        const totalDays = inclusiveDayCount(start, end);
 
         const leave = new Leave({
             userId,
+            companyId: req.user.companyId,
             leaveType,
             startDate,
             endDate,
             totalDays,
-            reason
+            reason: reason.trim(),
         });
 
         await leave.save();
@@ -72,7 +137,7 @@ exports.getMyLeaves = async (req, res) => {
 exports.getAllLeaves = async (req, res) => {
     try {
 
-        const leaves = await Leave.find({})
+        const leaves = await Leave.find({ companyId: req.user.companyId ?? null })
             .populate("userId", "fullName email department designation")
             .sort({ createdAt: -1 });
 
@@ -185,8 +250,8 @@ exports.updateLeaveStatus = async (req, res) => {
             });
         }
 
-        const leave = await Leave.findByIdAndUpdate(
-            id,
+        const leave = await Leave.findOneAndUpdate(
+            { _id: id, companyId: req.user.companyId ?? null },
             { status },
             { new: true }
         );

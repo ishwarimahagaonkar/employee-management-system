@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Company = require("../models/Company");
 
 // VERIFY TOKEN
 exports.protect = async (req, res, next) => {
@@ -55,4 +56,48 @@ exports.adminOnly = (req, res, next) => {
     }
 
     next();
+};
+
+
+// SUPER ADMIN ONLY
+exports.superAdminOnly = (req, res, next) => {
+
+    if (!req.user || req.user.role !== "superadmin") {
+        return res.status(403).json({
+            message: "Super admin access only",
+        });
+    }
+
+    next();
+};
+
+
+// PREMIUM PLAN ONLY (blocks Standard-plan companies from Travel/Payroll/Salary Slip/Report)
+exports.restrictToPremium = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                message: "Not authorized",
+            });
+        }
+
+        // SUPER ADMIN ALWAYS HAS FULL ACCESS
+        if (req.user.role === "superadmin" || !req.user.companyId) {
+            return next();
+        }
+
+        const company = await Company.findById(req.user.companyId).select("subscription.plan");
+
+        if (company && company.subscription.plan === "Standard") {
+            return res.status(403).json({
+                message: "This feature isn't included in your company's plan. Contact your admin to upgrade to Premium.",
+            });
+        }
+
+        next();
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+        });
+    }
 };

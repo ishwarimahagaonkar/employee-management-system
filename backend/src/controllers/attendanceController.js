@@ -6,10 +6,10 @@ const Settings = require("../models/Settings");
 const { isWithinOffice } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
 
-const getOrgSettings = async () => {
-  let settings = await Settings.findOne();
+const getOrgSettings = async (companyId) => {
+  let settings = await Settings.findOne({ companyId: companyId ?? null });
   if (!settings) {
-    settings = await Settings.create({});
+    settings = await Settings.create({ companyId: companyId ?? null });
   }
   return settings;
 };
@@ -47,7 +47,7 @@ exports.punchIn = async (req, res) => {
 
     const { lat, lng, address, photo } = req.body;
 
-    const settings = await getOrgSettings();
+    const settings = await getOrgSettings(req.user.companyId);
 
     // Create today's date string in Asia/Kolkata timezone (YYYY-MM-DD)
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -90,6 +90,7 @@ exports.punchIn = async (req, res) => {
     // Create attendance record
     const attendance = await Attendance.create({
       userId: req.user._id,
+      companyId: req.user.companyId,
       date: todayStr,
       punchInTime: now,
       punchInLocation: {
@@ -127,7 +128,7 @@ exports.punchOut = async (req, res) => {
   try {
     const { lat, lng, address, photo } = req.body;
 
-    const settings = await getOrgSettings();
+    const settings = await getOrgSettings(req.user.companyId);
 
     // Verify employee location (unless GPS enforcement is off)
     const allowed = settings.enforceGps
@@ -210,6 +211,7 @@ exports.requestEmergency = async (req, res) => {
 
       attendance = await Attendance.create({
         userId: req.user._id,
+        companyId: req.user.companyId,
         date: todayStr,
         punchInTime: new Date(),
         punchInLocation: { lat, lng, address },
@@ -234,7 +236,7 @@ exports.requestEmergency = async (req, res) => {
       attendance.emergencyReason = reason;
       attendance.status = "pending";
 
-      const settings = await getOrgSettings();
+      const settings = await getOrgSettings(req.user.companyId);
       const hours = calculateWorkingHours(
         attendance.punchInTime,
         attendance.punchOutTime
@@ -265,7 +267,7 @@ exports.approveEmergency = async (req, res) => {
     const { id } = req.params;
     const { action, comment } = req.body;
 
-    const attendance = await Attendance.findById(id);
+    const attendance = await Attendance.findOne({ _id: id, companyId: req.user.companyId ?? null });
 
     if (!attendance) {
       return res.status(404).json({
@@ -276,7 +278,7 @@ exports.approveEmergency = async (req, res) => {
     // Update request status -- an approved request still counts as late
     // if the punch-in itself happened past the work start + threshold
     if (action === "approve") {
-      const settings = await getOrgSettings();
+      const settings = await getOrgSettings(req.user.companyId);
       attendance.status = isPunchInLate(attendance.punchInTime, settings)
         ? "late"
         : "approved";
@@ -307,7 +309,7 @@ exports.approveEmergency = async (req, res) => {
  */
 exports.getAttendanceByUser = async (req, res) => {
   try {
-    const attendance = await Attendance.find({})
+    const attendance = await Attendance.find({ companyId: req.user.companyId ?? null })
       .populate("userId", "fullName email department designation")
       .sort({ punchInTime: -1 });
 

@@ -8,6 +8,10 @@ exports.generateSalarySlip = async (req, res) => {
 
         const user = await User.findById(userId);
 
+        if (!user || String(user.companyId ?? null) !== String(req.user.companyId ?? null)) {
+            return res.status(404).json({ message: "Employee not found" });
+        }
+
         const records = await Attendance.find({ userId });
 
         const filtered = records.filter((att) => {

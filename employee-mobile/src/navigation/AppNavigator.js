@@ -4,6 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import AuthStack from "./AuthStack";
 import MainStack from "./MainStack";
 import AdminDrawerNavigator from "./AdminDrawerNavigator";
+import SuperAdminDrawerNavigator from "./SuperAdminDrawerNavigator";
 
 import { AuthContext } from "../context/AuthContext";
 
@@ -16,6 +17,7 @@ export default function AppNavigator() {
 
   const renderApp = () => {
     if (!token) return <AuthStack />;
+    if (user?.role === "superadmin") return <SuperAdminDrawerNavigator />;
     if (user?.role === "admin") return <AdminDrawerNavigator />;
     return <MainStack />;
   };
