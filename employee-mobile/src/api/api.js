@@ -3,7 +3,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API = axios.create({
-  baseURL: "http://10.66.244.144:5000/api",
+  baseURL: "https://api.spereon.codes/api",
   timeout: 15000,
 });
 
