@@ -5,6 +5,8 @@ import TravelHeader from "./components/TravelHeader";
 import TravelSummaryCard from "./components/TravelSummaryCard";
 import TravelHistoryCard from "./components/TravelHistoryCard";
 import MeetingDetailsModal from "./components/MeetingDetailsModal";
+import TripDetailModal from "./components/TripDetailModal";
+import CoTravelerPickerModal from "./components/CoTravelerPickerModal";
 import useTravel from "./hooks/useTravel";
 
 export default function TravelScreen() {
@@ -24,6 +26,9 @@ export default function TravelScreen() {
 
   const [purpose, setPurpose] = useState("");
   const [meetingModalVisible, setMeetingModalVisible] = useState(false);
+  const [detailTrip, setDetailTrip] = useState(null);
+  const [coTravelers, setCoTravelers] = useState([]);
+  const [coTravelerModalVisible, setCoTravelerModalVisible] = useState(false);
 
   if (loading) {
     return (
@@ -38,7 +43,10 @@ export default function TravelScreen() {
       Alert.alert("Enter purpose");
       return;
     }
-    startTrip(purpose, () => setPurpose(""));
+    startTrip(purpose, coTravelers, () => {
+      setPurpose("");
+      setCoTravelers([]);
+    });
   };
 
   return (
@@ -50,6 +58,8 @@ export default function TravelScreen() {
         setPurpose={setPurpose}
         btnLoading={btnLoading}
         pendingMeetingTrip={pendingMeetingTrip}
+        coTravelerCount={coTravelers.length}
+        onAddCoTravelers={() => setCoTravelerModalVisible(true)}
         onStart={handleStart}
         onEnd={() => endTrip()}
         onAddMeeting={() => setMeetingModalVisible(true)}
@@ -69,7 +79,7 @@ export default function TravelScreen() {
           <Text style={styles.emptyText}>No travel records found</Text>
         ) : (
           history.map((trip) => (
-            <TravelHistoryCard key={trip._id} trip={trip} />
+            <TravelHistoryCard key={trip._id} trip={trip} onPress={setDetailTrip} />
           ))
         )}
       </View>
@@ -81,6 +91,22 @@ export default function TravelScreen() {
         onSubmit={(details) =>
           logMeeting(pendingMeetingTrip._id, details, () => setMeetingModalVisible(false))
         }
+      />
+
+      <TripDetailModal
+        visible={!!detailTrip}
+        trip={detailTrip}
+        onClose={() => setDetailTrip(null)}
+      />
+
+      <CoTravelerPickerModal
+        visible={coTravelerModalVisible}
+        selectedIds={coTravelers}
+        onConfirm={(ids) => {
+          setCoTravelers(ids);
+          setCoTravelerModalVisible(false);
+        }}
+        onClose={() => setCoTravelerModalVisible(false)}
       />
     </ScrollView>
   );

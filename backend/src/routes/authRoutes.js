@@ -5,10 +5,13 @@ const {
     logout,
 } = require("../controllers/authController");
 
+const { protect } = require("../middleware/authMiddleware");
+const { loginLimiter } = require("../middleware/rateLimiter");
+
 const router = express.Router();
 
-router.post("/login", login);
+router.post("/login", loginLimiter, login);
 
-router.post("/logout", logout);
+router.post("/logout", protect, logout);
 
 module.exports = router;

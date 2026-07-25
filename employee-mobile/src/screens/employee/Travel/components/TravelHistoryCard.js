@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const formatDate = (isoDate) => {
@@ -19,11 +19,11 @@ const formatTime = (isoDate) => {
   });
 };
 
-export default function TravelHistoryCard({ trip }) {
+export default function TravelHistoryCard({ trip, onPress }) {
   const inProgress = !trip.endTime;
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => onPress?.(trip)} activeOpacity={0.7}>
       <View style={styles.topRow}>
         <View style={styles.icon}>
           <Ionicons name="location" size={16} color="#112250" />
@@ -36,6 +36,11 @@ export default function TravelHistoryCard({ trip }) {
             {!inProgress ? ` - ${formatTime(trip.endTime)}` : ""}
             {!inProgress ? ` • ${trip.distanceKm} km` : ""}
           </Text>
+          {!!trip.traveledWith && (
+            <Text style={styles.coTravelLine} numberOfLines={1}>
+              Traveled with {trip.traveledWith}
+            </Text>
+          )}
         </View>
 
         <View style={[styles.statusPill, inProgress ? styles.statusActive : styles.statusDone]}>
@@ -43,6 +48,8 @@ export default function TravelHistoryCard({ trip }) {
             {inProgress ? "In Progress" : "Done"}
           </Text>
         </View>
+
+        <Ionicons name="chevron-forward" size={16} color="#C4C4CC" style={styles.chevron} />
       </View>
 
       {!!(trip.startLocation?.address || trip.endLocation?.address) && (
@@ -57,7 +64,7 @@ export default function TravelHistoryCard({ trip }) {
           {trip.meetingDetails.meetingStartTime ? ` • ${trip.meetingDetails.meetingStartTime}-${trip.meetingDetails.meetingEndTime}` : ""}
         </Text>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -88,6 +95,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+  },
+
+  chevron: {
+    marginLeft: 6,
+  },
+
+  coTravelLine: {
+    fontSize: 11,
+    color: "#112250",
+    marginTop: 1,
+    fontWeight: "600",
   },
 
   titleBlock: {

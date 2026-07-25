@@ -58,14 +58,20 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName, comp
         throw err;
     }
 
-    const [attendanceRecords, leaveRecords, travelRecords, holidayRecords] = await Promise.all([
+    const [attendanceRecords, leaveRecords, travelRecords, coTravelRecords, holidayRecords] = await Promise.all([
         Attendance.find({ userId, date: { $gte: startDate, $lte: endDate } }),
         Leave.find({
             userId,
             startDate: { $lte: endDate },
             endDate: { $gte: startDate },
         }).sort({ startDate: 1 }),
-        Travel.find({ userId, date: { $gte: startDate, $lte: endDate } }).sort({ date: 1 }),
+        Travel.find({ userId, date: { $gte: startDate, $lte: endDate } })
+            .populate("trips.coTravelers", "fullName")
+            .sort({ date: 1 }),
+        // Trips (owned by others) where this employee was a co-traveler.
+        Travel.find({ "trips.coTravelers": userId, date: { $gte: startDate, $lte: endDate } })
+            .populate("userId", "fullName")
+            .sort({ date: 1 }),
         Holiday.find({ companyId, date: { $gte: startDate, $lte: endDate } }).sort({ date: 1 }),
     ]);
 
@@ -147,9 +153,54 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName, comp
                 distanceKm: trip.distanceKm || 0,
                 approvalStatus: NOT_AVAILABLE,
                 expenseAmount: NOT_AVAILABLE,
+
+                // Full trip detail for the timeline view (start -> end -> meeting).
+                startTime: trip.startTime,
+                endTime: trip.endTime,
+                startLocation: trip.startLocation,
+                endLocation: trip.endLocation,
+                durationMin: trip.durationMin,
+                meetingDetails: trip.meetingDetails,
+                coTravelers: (trip.coTravelers || []).map((c) => ({ fullName: c.fullName })),
+                status: trip.endTime ? "completed" : "in-progress",
             });
         });
     });
+
+    // Trips where this employee only participated as a co-traveler: shown with
+    // 0 km and "traveled with <primary>", contributing nothing to reimbursement.
+    coTravelRecords.forEach((t) => {
+        const primaryName = t.userId?.fullName || "a colleague";
+        (t.trips || []).forEach((trip) => {
+            const isCo = (trip.coTravelers || []).some((id) => String(id) === String(userId));
+            if (!isCo) return;
+
+            travelEntries.push({
+                date: t.date,
+                destination:
+                    trip.endLocation?.address ||
+                    trip.startLocation?.address ||
+                    trip.meetingDetails?.customerName ||
+                    NOT_AVAILABLE,
+                purpose: trip.purpose || NOT_AVAILABLE,
+                distanceKm: 0,
+                approvalStatus: NOT_AVAILABLE,
+                expenseAmount: NOT_AVAILABLE,
+
+                startTime: trip.startTime,
+                endTime: trip.endTime,
+                startLocation: trip.startLocation,
+                endLocation: trip.endLocation,
+                durationMin: trip.durationMin,
+                meetingDetails: trip.meetingDetails,
+                traveledWith: primaryName,
+                isCoTraveler: true,
+                status: trip.endTime ? "completed" : "in-progress",
+            });
+        });
+    });
+
+    travelEntries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
     const totalKmTravelled = Number(
         travelEntries.reduce((sum, t) => sum + (t.distanceKm || 0), 0).toFixed(1)
@@ -517,9 +568,13 @@ exports.getEmployeeReport = async (req, res) => {
 
         res.status(200).json({ success: true, data: report });
     } catch (error) {
-        res.status(error.status || 500).json({
+        // Intentional 4xx errors carry a safe message; unexpected errors are
+        // logged and returned generically so internals don't leak.
+        const status = error.status || 500;
+        if (status === 500) console.error("report error:", error);
+        res.status(status).json({
             success: false,
-            message: error.message || "Server Error",
+            message: status === 500 ? "Server error" : error.message,
         });
     }
 };
@@ -573,9 +628,13 @@ exports.exportEmployeeReport = async (req, res) => {
             message: "format must be one of xlsx, csv, pdf",
         });
     } catch (error) {
-        res.status(error.status || 500).json({
+        // Intentional 4xx errors carry a safe message; unexpected errors are
+        // logged and returned generically so internals don't leak.
+        const status = error.status || 500;
+        if (status === 500) console.error("report error:", error);
+        res.status(status).json({
             success: false,
-            message: error.message || "Server Error",
+            message: status === 500 ? "Server error" : error.message,
         });
     }
 };

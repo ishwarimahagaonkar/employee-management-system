@@ -22,14 +22,31 @@ exports.getSettings = async (req, res) => {
     try {
         const settings = await getOrCreateSettings(req.user.companyId);
 
+        // Non-admins get a limited view: office coordinates and company contact
+        // details are withheld; they only need policy fields.
+        const isAdmin = req.user.role === "admin" || req.user.role === "superadmin";
+
+        let data = settings;
+        if (!isAdmin) {
+            data = {
+                companyName: settings.companyName,
+                workStartTime: settings.workStartTime,
+                workEndTime: settings.workEndTime,
+                halfDayHours: settings.halfDayHours,
+                paidLeaveAllotment: settings.paidLeaveAllotment,
+                enforceGps: settings.enforceGps,
+                geofenceRadius: settings.geofenceRadius,
+            };
+        }
+
         res.status(200).json({
             success: true,
-            data: settings,
+            data,
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -75,7 +92,7 @@ exports.updateSettings = async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Server error",
         });
     }
 };

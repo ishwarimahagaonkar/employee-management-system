@@ -54,12 +54,18 @@ export default function EmployeesScreen({ navigation }) {
         await api.put(`/employees/${editingEmployee._id}`, {
           empID: form.empID,
           fullName: form.fullName,
-          email: form.email,
-          password: form.password,
           department: form.department,
           designation: form.designation,
+          hourlyRate: form.hourlyRate === "" ? undefined : Number(form.hourlyRate),
           JoiningDate: form.JoiningDate,
         });
+
+        // Optional password reset on edit (only when a new password was entered).
+        if (form.password && form.password.trim()) {
+          await api.patch(`/employees/${editingEmployee._id}/password`, {
+            password: form.password,
+          });
+        }
       } else {
         if (!form.empID || !form.fullName || !form.email || !form.password || !form.department || !form.designation || !form.JoiningDate) {
           Alert.alert("Error", "All fields are required");

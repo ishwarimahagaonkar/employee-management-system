@@ -2,7 +2,7 @@
   "expo": {
     "name": "StaffTrack",
     "slug": "employee-management-system",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +28,17 @@
       "expo-status-bar",
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "StaffTrack records your location during business trips to calculate accurate travel distance.",
+          "locationAlwaysPermission": "StaffTrack records your location during business trips to calculate accurate travel distance.",
+          "locationWhenInUsePermission": "StaffTrack uses your location to verify attendance and track business trips."
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import TripTimeline from "../../../../components/TripTimeline";
 
 function SectionCard({ title, children }) {
   return (
@@ -127,14 +128,7 @@ export default function ReportPreview({ report }) {
           <Text style={styles.emptyText}>No travel records in this period.</Text>
         ) : (
           travelSummary.records.map((t, idx) => (
-            <View key={idx} style={styles.travelRow}>
-              <Text style={styles.travelDate}>{t.date}</Text>
-              <Text style={styles.travelDestination}>{t.destination}</Text>
-              <Text style={styles.travelMeta}>Purpose: {t.purpose} • Distance: {t.distanceKm} km</Text>
-              <Text style={styles.travelMeta}>
-                Approval: {t.approvalStatus} • Expense: {t.expenseAmount}
-              </Text>
-            </View>
+            <TripTimeline key={idx} trip={t} index={idx} showDate />
           ))
         )}
         <View style={styles.divider} />

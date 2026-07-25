@@ -17,15 +17,15 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // CHECK REQUIRED FIELDS
-        if (!email || !password) {
+        // CHECK REQUIRED FIELDS (must be strings -- rejects injected objects)
+        if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
             return res.status(400).json({
                 message: "Email and password are required",
             });
         }
 
         // FIND USER
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
 
         if (!user) {
             return res.status(400).json({
@@ -42,6 +42,13 @@ exports.login = async (req, res) => {
         if (!isMatch) {
             return res.status(400).json({
                 message: "Invalid credentials",
+            });
+        }
+
+        // BLOCK DEACTIVATED ACCOUNTS
+        if (user.isActive === false) {
+            return res.status(403).json({
+                message: "Your account has been deactivated. Contact your admin.",
             });
         }
 
@@ -63,6 +70,7 @@ exports.login = async (req, res) => {
             {
                 id: user._id,
                 role: user.role,
+                tokenVersion: user.tokenVersion ?? 0,
             },
             process.env.JWT_SECRET,
             {
@@ -90,25 +98,34 @@ exports.login = async (req, res) => {
         });
 
     } catch (error) {
-
+        console.error("login error:", error);
         res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
-
     }
 };
 
 // ================= LOGOUT =================
+// Invalidates the current token (and any other live sessions) by bumping the
+// user's tokenVersion, so a JWT can't be reused after logout.
 exports.logout = async (req, res) => {
   try {
+    if (req.user?._id) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { $inc: { tokenVersion: 1 } }
+      );
+    }
+
     res.status(200).json({
       success: true,
       message: "Logged out successfully",
     });
   } catch (error) {
+    console.error("logout error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
     });
   }
 };

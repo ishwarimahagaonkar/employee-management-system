@@ -1,6 +1,11 @@
 const User = require("../models/User");
 const Company = require("../models/Company");
+const Attendance = require("../models/Attendance");
+const Leave = require("../models/Leave");
+const Travel = require("../models/Travel");
 const bcrypt = require("bcryptjs");
+const { getPagination } = require("../utils/pagination");
+const { validatePassword, isValidEmail } = require("../utils/validators");
 
 // Compares two companyId values (handles null/undefined/ObjectId uniformly)
 const sameCompany = (a, b) => String(a ?? null) === String(b ?? null);
@@ -11,7 +16,9 @@ const sameCompany = (a, b) => String(a ?? null) === String(b ?? null);
 // ==========================
 exports.createEmployee = async (req, res) => {
     try {
-        const { empID, fullName, email, password, department, designation, role } = req.body;
+        const { empID, fullName, email, password, department, designation, role, hourlyRate } = req.body;
+        // Accept either casing from clients.
+        const joiningDate = req.body.joiningDate || req.body.JoiningDate;
 
         // Validation
         if (!empID || !fullName || !email || !password || !department || !designation) {
@@ -26,15 +33,51 @@ exports.createEmployee = async (req, res) => {
             });
         }
 
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ message: "Please provide a valid email address" });
+        }
+
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            return res.status(400).json({ message: passwordError });
+        }
+
+        if (hourlyRate !== undefined && (isNaN(hourlyRate) || Number(hourlyRate) < 0)) {
+            return res.status(400).json({ message: "Hourly rate must be a non-negative number" });
+        }
+
         const normalizedEmail = email.toLowerCase();
+        const companyId = req.user.companyId;
 
-        // Check duplicate
-        const existingUser = await User.findOne({ email: normalizedEmail });
-
-        if (existingUser) {
-            return res.status(400).json({
-                message: "Employee already exists",
+        // Email is a global login identifier -> must be unique across the system.
+        const emailTaken = await User.findOne({ email: normalizedEmail });
+        if (emailTaken) {
+            return res.status(409).json({
+                message: "A user with this email already exists",
             });
+        }
+
+        // empID only needs to be unique WITHIN the company (companies may each
+        // reuse ids like "EMP001").
+        const empIdTaken = await User.findOne({ empID, companyId: companyId ?? null });
+        if (empIdTaken) {
+            return res.status(409).json({
+                message: "An employee with this ID already exists in your company",
+            });
+        }
+
+        // Enforce the company's subscription seat limit.
+        if (companyId) {
+            const company = await Company.findById(companyId).select("subscription.employeeLimit");
+            const limit = company?.subscription?.employeeLimit;
+            if (limit) {
+                const employeeCount = await User.countDocuments({ role: "employee", companyId });
+                if (employeeCount >= limit) {
+                    return res.status(403).json({
+                        message: `Employee limit reached for your plan (${limit}). Upgrade your plan to add more.`,
+                    });
+                }
+            }
         }
 
         // Hash password
@@ -49,7 +92,9 @@ exports.createEmployee = async (req, res) => {
             role: role || "employee",
             department,
             designation,
-            companyId: req.user.companyId,
+            joiningDate,
+            hourlyRate: hourlyRate !== undefined ? Number(hourlyRate) : 0,
+            companyId,
         });
 
         // Remove password before sending response
@@ -62,9 +107,12 @@ exports.createEmployee = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({
-            message: error.message,
-        });
+        // Duplicate key (unique index) -> conflict, not a server error.
+        if (error.code === 11000) {
+            return res.status(409).json({ message: "Employee ID or email already exists" });
+        }
+        console.error("createEmployee error:", error);
+        return res.status(500).json({ message: "Server error" });
     }
 };
 
@@ -74,18 +122,29 @@ exports.createEmployee = async (req, res) => {
 // ==========================
 exports.getAllEmployees = async (req, res) => {
     try {
-        const employees = await User.find({ role: "employee", companyId: req.user.companyId })
-            .select("-password")
-            .sort({ createdAt: -1 });
+        const filter = { role: "employee", companyId: req.user.companyId };
+        const { paginate, page, limit, skip } = getPagination(req.query);
+
+        let queryBuilder = User.find(filter).select("-password").sort({ createdAt: -1 });
+        if (paginate) {
+            queryBuilder = queryBuilder.skip(skip).limit(limit);
+        }
+
+        const [employees, total] = await Promise.all([
+            queryBuilder,
+            User.countDocuments(filter),
+        ]);
 
         return res.status(200).json({
             count: employees.length,
+            total,
+            page: paginate ? page : 1,
             employees,
         });
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -111,7 +170,35 @@ exports.getMyProfile = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
+        });
+    }
+};
+
+
+// ==========================
+// GET COLLEAGUES (any logged-in user, same company)
+// Minimal list used for picking co-travelers on a trip.
+// ==========================
+exports.getColleagues = async (req, res) => {
+    try {
+        const colleagues = await User.find({
+            companyId: req.user.companyId ?? null,
+            role: { $in: ["employee", "admin"] },
+            isActive: { $ne: false },
+            _id: { $ne: req.user._id },
+        })
+            .select("empID fullName department designation")
+            .sort({ fullName: 1 });
+
+        return res.status(200).json({
+            count: colleagues.length,
+            colleagues,
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server error",
         });
     }
 };
@@ -134,7 +221,7 @@ exports.getEmployeeById = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -158,10 +245,30 @@ exports.updateEmployee = async (req, res) => {
             delete req.body.role;
         }
 
+        // Never let the update body tamper with auth-critical fields directly.
+        delete req.body.password;
+        delete req.body.tokenVersion;
+        delete req.body.companyId;
+
+        if (req.body.hourlyRate !== undefined && (isNaN(req.body.hourlyRate) || Number(req.body.hourlyRate) < 0)) {
+            return res.status(400).json({ message: "Hourly rate must be a non-negative number" });
+        }
+
+        // Normalize joining-date key casing so it maps to the schema field.
+        if (req.body.JoiningDate !== undefined) {
+            req.body.joiningDate = req.body.JoiningDate;
+            delete req.body.JoiningDate;
+        }
+
+        // Deactivating an employee must immediately kill their live sessions.
+        if (req.body.isActive === false && employee.isActive !== false) {
+            req.body.tokenVersion = (employee.tokenVersion ?? 0) + 1;
+        }
+
         const updatedEmployee = await User.findByIdAndUpdate(
             req.params.id,
             req.body,
-            { new: true }
+            { new: true, runValidators: true }
         ).select("-password");
 
         return res.status(200).json({
@@ -171,7 +278,44 @@ exports.updateEmployee = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
+        });
+    }
+};
+
+
+// ==========================
+// RESET EMPLOYEE PASSWORD (ADMIN)
+// ==========================
+exports.resetEmployeePassword = async (req, res) => {
+    try {
+        const { password } = req.body;
+
+        const employee = await User.findById(req.params.id);
+
+        if (!employee || employee.role !== "employee" || !sameCompany(employee.companyId, req.user.companyId)) {
+            return res.status(404).json({
+                message: "Employee not found",
+            });
+        }
+
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            return res.status(400).json({ message: passwordError });
+        }
+
+        employee.password = await bcrypt.hash(password, 10);
+        // Invalidate the employee's existing sessions after a password reset.
+        employee.tokenVersion = (employee.tokenVersion ?? 0) + 1;
+        await employee.save();
+
+        return res.status(200).json({
+            message: "Password reset successfully",
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server error",
         });
     }
 };
@@ -190,6 +334,14 @@ exports.deleteEmployee = async (req, res) => {
             });
         }
 
+        // Cascade: remove the employee's own records so no orphans are left
+        // pointing at a deleted user.
+        await Promise.all([
+            Attendance.deleteMany({ userId: req.params.id }),
+            Leave.deleteMany({ userId: req.params.id }),
+            Travel.deleteMany({ userId: req.params.id }),
+        ]);
+
         await User.findByIdAndDelete(req.params.id);
 
         return res.status(200).json({
@@ -198,7 +350,7 @@ exports.deleteEmployee = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };

@@ -35,6 +35,7 @@ export default function DetailedReportPanel({ employees }) {
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
   const [downloadingFormat, setDownloadingFormat] = useState(null);
+  const [downloadingSlip, setDownloadingSlip] = useState(false);
   const [error, setError] = useState(null);
 
   const handleGenerate = async () => {
@@ -85,6 +86,39 @@ export default function DetailedReportPanel({ employees }) {
       Alert.alert("Export failed", err.response?.data?.message || err.message || "Could not export report");
     } finally {
       setDownloadingFormat(null);
+    }
+  };
+
+  // Salary slip is per-month; derive month/year from the selected period's
+  // start date (e.g. "This Month" -> the 1st of the current month).
+  const handleDownloadSlip = async () => {
+    if (!selectedEmployee) return;
+
+    const [year, month] = startDate.split("-");
+    setDownloadingSlip(true);
+    try {
+      const res = await api.get("/salary-slip/generate", {
+        params: { userId: selectedEmployee._id, month, year },
+        responseType: "arraybuffer",
+      });
+
+      const base64 = arrayBufferToBase64(res.data);
+      const fileName = `salary-slip-${selectedEmployee.empID}-${month}-${year}.pdf`;
+      const fileUri = FileSystem.cacheDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: MIME.pdf, dialogTitle: "Salary Slip" });
+      } else {
+        Alert.alert("Salary slip saved", `Saved to ${fileUri}`);
+      }
+    } catch (err) {
+      Alert.alert("Download failed", err.response?.data?.message || err.message || "Could not generate salary slip");
+    } finally {
+      setDownloadingSlip(false);
     }
   };
 
@@ -143,6 +177,19 @@ export default function DetailedReportPanel({ employees }) {
               </TouchableOpacity>
             ))}
           </View>
+
+          <TouchableOpacity
+            style={styles.slipBtn}
+            onPress={handleDownloadSlip}
+            disabled={downloadingSlip}
+          >
+            {downloadingSlip ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="document-text-outline" size={16} color="#fff" />
+            )}
+            <Text style={styles.slipText}>Salary Slip (PDF)</Text>
+          </TouchableOpacity>
 
           <ReportPreview report={report} />
         </>
@@ -259,5 +306,22 @@ const styles = StyleSheet.create({
     color: "#112250",
     fontWeight: "700",
     fontSize: 13,
+  },
+
+  slipBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#112250",
+    borderRadius: 14,
+    paddingVertical: 13,
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  slipText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
 });

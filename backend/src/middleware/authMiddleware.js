@@ -34,6 +34,23 @@ exports.protect = async (req, res, next) => {
             });
         }
 
+        // BLOCK DEACTIVATED ACCOUNTS
+        if (user.isActive === false) {
+            return res.status(403).json({
+                message: "Your account has been deactivated. Contact your admin.",
+            });
+        }
+
+        // REVOKE TOKENS ISSUED BEFORE THE LATEST logout / deactivation.
+        // Legacy tokens (issued before this field existed) carry no version;
+        // treat their expected version as 0 to match untouched accounts.
+        const tokenVersion = decoded.tokenVersion ?? 0;
+        if (tokenVersion !== (user.tokenVersion ?? 0)) {
+            return res.status(401).json({
+                message: "Session expired. Please log in again.",
+            });
+        }
+
         // SAVE FULL USER INFO
         req.user = user;
 
