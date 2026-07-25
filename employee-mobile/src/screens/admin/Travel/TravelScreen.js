@@ -7,10 +7,13 @@ import TravelSummaryCards from "./components/TravelSummaryCards";
 import ActiveTripCard from "./components/ActiveTripCard";
 import TravelHistoryListCard from "./components/TravelHistoryListCard";
 import useAdminTravel from "./hooks/useAdminTravel";
+import ErrorState from "../../../components/ErrorState";
 
 export default function TravelScreen({ navigation }) {
   const {
     loading,
+    error,
+    retry,
     totalDistanceKm,
     activeTripsCount,
     completedTripsCount,
@@ -30,6 +33,8 @@ export default function TravelScreen({ navigation }) {
 
       {loading ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <TravelSummaryCards

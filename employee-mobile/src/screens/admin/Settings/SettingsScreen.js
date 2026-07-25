@@ -14,6 +14,8 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../../api/api.js";
 import SettingsCard from "./components/SettingsCard";
 import SettingsField from "./components/SettingsField";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const emptyForm = {
   companyName: "",
@@ -53,17 +55,25 @@ export default function SettingsScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [savedForm, setSavedForm] = useState(emptyForm);
+  const [error, setError] = useState(null);
 
   const fetchSettings = async () => {
     try {
+      setError(null);
       const res = await api.get("/settings");
       const next = formFromSettings(res.data?.data);
       setForm(next);
       setSavedForm(next);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchSettings();
   };
 
   useEffect(() => {
@@ -118,6 +128,14 @@ export default function SettingsScreen({ navigation }) {
     return (
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ErrorState message={error} onRetry={retry} />
       </SafeAreaView>
     );
   }

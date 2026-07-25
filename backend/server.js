@@ -1,6 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const compression = require("compression");
 
 const connectDB = require("./src/config/db");
 
@@ -48,6 +49,10 @@ const app = express();
 // Trust the first proxy hop so client IPs (for rate limiting) and HTTPS are
 // read correctly when running behind nginx / a cloud load balancer.
 app.set("trust proxy", 1);
+
+// gzip every response above ~1 KB. JSON lists compress by roughly 80%, which
+// matters most on the mobile connections this app actually runs over.
+app.use(compression({ threshold: 1024 }));
 
 // CORS: restrict to an explicit allowlist in production (comma-separated
 // CORS_ORIGINS env). If unset, fall back to open CORS but warn -- native mobile

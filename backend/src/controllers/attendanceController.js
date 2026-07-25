@@ -8,6 +8,7 @@ const { isWithinOffice, isValidCoord } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
 const { getPagination } = require("../utils/pagination");
 const { monthDateRange } = require("../utils/monthRange");
+const { savePunchPhoto, readPunchPhoto } = require("../utils/photoStorage");
 
 const getOrgSettings = async (companyId) => {
   let settings = await Settings.findOne({ companyId: companyId ?? null });
@@ -101,7 +102,7 @@ exports.punchIn = async (req, res) => {
         lng,
         address,
       },
-      punchInPhoto: photo,
+      punchInPhoto: savePunchPhoto(photo),
 
       status: attendanceStatus,
     });
@@ -177,7 +178,7 @@ exports.punchOut = async (req, res) => {
     // Store punch-out details
     attendance.punchOutTime = new Date();
     attendance.punchOutLocation = { lat, lng, address, };
-    attendance.punchOutPhoto = photo;
+    attendance.punchOutPhoto = savePunchPhoto(photo);
 
 
     // Calculate total working hours
@@ -263,7 +264,7 @@ exports.sitePunchOut = async (req, res) => {
     // Record the site punch-out, linked to the trip/meeting. No geofence check.
     attendance.punchOutTime = new Date();
     attendance.punchOutLocation = { lat, lng, address };
-    attendance.punchOutPhoto = photo;
+    attendance.punchOutPhoto = savePunchPhoto(photo);
     attendance.sitePunchOut = true;
     attendance.linkedTripId = tripWithMeeting._id;
 
@@ -326,7 +327,7 @@ exports.requestEmergency = async (req, res) => {
         date: todayStr,
         punchInTime: new Date(),
         punchInLocation: { lat, lng, address },
-        punchInPhoto: photo,
+        punchInPhoto: savePunchPhoto(photo),
         isOutsideLocation: true,
         emergencyRequest: true,
         emergencyReason: reason,
@@ -341,7 +342,7 @@ exports.requestEmergency = async (req, res) => {
 
       attendance.punchOutTime = new Date();
       attendance.punchOutLocation = { lat, lng, address };
-      attendance.punchOutPhoto = photo;
+      attendance.punchOutPhoto = savePunchPhoto(photo);
       attendance.isOutsideLocation = true;
       attendance.emergencyRequest = true;
       attendance.emergencyReason = reason;
@@ -423,17 +424,36 @@ exports.getAttendanceByUser = async (req, res) => {
     const filter = { companyId: req.user.companyId ?? null };
     const { paginate, page, limit, skip } = getPagination(req.query);
 
-    let queryBuilder = Attendance.find(filter)
-      .populate("userId", "fullName email department designation")
-      .sort({ punchInTime: -1 });
+    // Punch selfies are base64 blobs measured in megabytes. Sending them with
+    // every row made this response tens of MB and pushed it past the app's
+    // request timeout. Rows carry only "is there a photo" flags; the images
+    // themselves are fetched per record by GET /attendance/:id/photos.
+    const pipeline = [{ $match: filter }, { $sort: { punchInTime: -1 } }];
+
     if (paginate) {
-      queryBuilder = queryBuilder.skip(skip).limit(limit);
+      pipeline.push({ $skip: skip }, { $limit: limit });
     }
 
+    pipeline.push(
+      {
+        $addFields: {
+          hasPunchInPhoto: { $gt: [{ $strLenCP: { $ifNull: ["$punchInPhoto", ""] } }, 0] },
+          hasPunchOutPhoto: { $gt: [{ $strLenCP: { $ifNull: ["$punchOutPhoto", ""] } }, 0] },
+        },
+      },
+      { $project: { punchInPhoto: 0, punchOutPhoto: 0 } }
+    );
+
     const [attendance, total] = await Promise.all([
-      queryBuilder,
+      Attendance.aggregate(pipeline),
       Attendance.countDocuments(filter),
     ]);
+
+    // Aggregation bypasses populate, so attach the employee details after.
+    await Attendance.populate(attendance, {
+      path: "userId",
+      select: "fullName email department designation",
+    });
 
     res.json({
       count: attendance.length,
@@ -472,7 +492,9 @@ exports.getMonthlyAttendance = async (req, res) => {
     const filtered = await Attendance.find({
       userId,
       date: { $gte: range.gte, $lte: range.lte },
-    }).sort({ date: 1 });
+    })
+      .select("-punchInPhoto -punchOutPhoto")
+      .sort({ date: 1 });
 
     const totalHours = filtered.reduce((sum, r) => sum + (r.workingHours || 0), 0);
 
@@ -501,7 +523,11 @@ exports.getMyAttendance = async (req, res) => {
     // opt-in (still an array) so growing histories can be bounded.
     const { paginate, limit, skip } = getPagination(req.query);
 
-    let queryBuilder = Attendance.find({ userId: req.user._id }).sort({ date: -1 });
+    // Photos excluded: nothing in the employee UI renders them, and they are
+    // multi-megabyte base64 blobs.
+    let queryBuilder = Attendance.find({ userId: req.user._id })
+      .select("-punchInPhoto -punchOutPhoto")
+      .sort({ date: -1 });
     if (paginate) {
       queryBuilder = queryBuilder.skip(skip).limit(limit);
     }
@@ -512,6 +538,36 @@ exports.getMyAttendance = async (req, res) => {
     res.status(500).json({
       message: "Server error",
     });
+  }
+};
+
+
+/**
+ * @desc Get the punch photos for one attendance record
+ * @route GET /attendance/:id/photos
+ * @access Admin
+ *
+ * Kept separate from the list endpoints so the multi-megabyte base64 images
+ * are only transferred when an admin actually opens a record.
+ */
+exports.getAttendancePhotos = async (req, res) => {
+  try {
+    const record = await Attendance.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId ?? null,
+    }).select("punchInPhoto punchOutPhoto");
+
+    if (!record) {
+      return res.status(404).json({ message: "Attendance record not found" });
+    }
+
+    // Images live on disk; read them back only for this one record.
+    res.json({
+      punchInPhoto: readPunchPhoto(record.punchInPhoto),
+      punchOutPhoto: readPunchPhoto(record.punchOutPhoto),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -528,7 +584,7 @@ exports.getTodayAttendance = async (req, res) => {
     const attendance = await Attendance.findOne({
       userId: req.user._id,
       date: todayStr,
-    });
+    }).select("-punchInPhoto -punchOutPhoto");
 
     res.json(attendance);
   } catch (err) {

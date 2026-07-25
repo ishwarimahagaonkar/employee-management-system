@@ -33,6 +33,8 @@ const attendanceSchema = new mongoose.Schema({
         address: String
     },
 
+    // Storage reference ("attendance/<file>.jpg"), not the image itself --
+    // see utils/photoStorage.js. Legacy rows may still hold raw base64.
     punchInPhoto: String,
     punchOutPhoto: String,
 

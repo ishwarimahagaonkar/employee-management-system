@@ -6,6 +6,7 @@ const Travel = require("../models/Travel");
 const bcrypt = require("bcryptjs");
 const { getPagination } = require("../utils/pagination");
 const { validatePassword, isValidEmail } = require("../utils/validators");
+const { deletePunchPhotos } = require("../utils/photoStorage");
 
 // Compares two companyId values (handles null/undefined/ObjectId uniformly)
 const sameCompany = (a, b) => String(a ?? null) === String(b ?? null);
@@ -333,6 +334,13 @@ exports.deleteEmployee = async (req, res) => {
                 message: "Employee not found",
             });
         }
+
+        // Remove the punch photo files before the records that reference
+        // them, otherwise the images are orphaned on disk forever.
+        const photoRows = await Attendance.find({ userId: req.params.id })
+            .select("punchInPhoto punchOutPhoto")
+            .lean();
+        deletePunchPhotos(photoRows.flatMap((r) => [r.punchInPhoto, r.punchOutPhoto]));
 
         // Cascade: remove the employee's own records so no orphans are left
         // pointing at a deleted user.

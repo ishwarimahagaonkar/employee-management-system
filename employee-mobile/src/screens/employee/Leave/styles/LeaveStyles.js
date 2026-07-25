@@ -12,11 +12,22 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  historyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+
   historyTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: "#1E1B4B",
-    marginBottom: 14,
+  },
+
+  historyCount: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
 
   emptyText: {

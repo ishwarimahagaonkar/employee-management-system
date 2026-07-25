@@ -21,6 +21,8 @@ import api from "../../../api/api.js";
 import AttendanceCard from "./AttendanceCard.js";
 import MonthlyAttendance from "./MonthlyAttendance.js";
 import EmergencyRequestModal from "./EmergencyRequestModal.js";
+import ErrorState from "../../../components/ErrorState.js";
+import { getApiErrorMessage } from "../../../utils/apiError.js";
 
 export default function AttendanceScreen() {
   const [todayAttendance, setTodayAttendance] = useState(null);
@@ -37,6 +39,7 @@ export default function AttendanceScreen() {
   const [pendingLocation, setPendingLocation] = useState(null);
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const cameraRef = useRef(null);   // ✅ Proper ref
   const cameraReadyRef = useRef(false);
   const navigation = useNavigation();
@@ -67,7 +70,8 @@ export default function AttendanceScreen() {
   // Unified fetch
   const fetchAttendanceData = async () => {
     try {
-      
+      setLoadError(null);
+
       const token = await AsyncStorage.getItem("token");
 
       const [todayRes, historyRes, travelRes] = await Promise.all([
@@ -92,10 +96,16 @@ export default function AttendanceScreen() {
       });
       setMarkedDates(formatted);
     } catch (err) {
+      setLoadError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-    
+
+  };
+
+  const retryLoad = () => {
+    setLoading(true);
+    fetchAttendanceData();
   };
 
   useEffect(() => {
@@ -402,6 +412,10 @@ export default function AttendanceScreen() {
           )}
         </View>
       </View>
+
+      {!!loadError && !loading && (
+        <ErrorState message={loadError} onRetry={retryLoad} compact />
+      )}
 
       {/* Monthly Summary */}
       <View style={styles.summaryCard}>

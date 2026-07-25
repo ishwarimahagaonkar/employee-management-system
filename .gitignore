@@ -1,1 +1,8 @@
 .claude/
+
+# Database backups: contain password hashes and personal data, and are large.
+backups/
+*.backup.json
+
+# Punch photos are user data, written at runtime.
+backend/uploads/

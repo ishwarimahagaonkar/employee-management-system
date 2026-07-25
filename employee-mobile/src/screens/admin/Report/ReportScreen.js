@@ -8,6 +8,8 @@ import DaySelector from "./components/DaySelector";
 import EmployeeReportCard from "./components/EmployeeReportCard";
 import DetailedReportPanel from "./components/DetailedReportPanel";
 import EmployeeDayDetailModal from "./components/EmployeeDayDetailModal";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const EXTRA_HOURS_THRESHOLD_MIN = 17 * 60 + 30; // 5:30 PM
 const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -46,9 +48,12 @@ export default function ReportScreen({ navigation }) {
   const [leaves, setLeaves] = useState([]);
   const [trips, setTrips] = useState([]);
   const [detailEmployee, setDetailEmployee] = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchData = async () => {
     try {
+      setError(null);
+
       const [employeesRes, attendanceRes, leaveRes, travelRes] = await Promise.all([
         api.get("/employees"),
         api.get("/attendance"),
@@ -61,9 +66,15 @@ export default function ReportScreen({ navigation }) {
       setLeaves(leaveRes.data?.data || []);
       setTrips(travelRes.data?.data?.trips || []);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchData();
   };
 
   useEffect(() => {
@@ -184,6 +195,8 @@ export default function ReportScreen({ navigation }) {
 
           {loading ? (
             <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={retry} />
           ) : (
             <FlatList
               data={filteredRows}

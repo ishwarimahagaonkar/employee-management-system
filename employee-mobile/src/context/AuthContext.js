@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useState } from "react";
+import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import api from "../api/api.js";
+import api, { setUnauthorizedHandler } from "../api/api.js";
 
 export const AuthContext = createContext();
 
@@ -11,6 +12,19 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkLogin();
+  }, []);
+
+  // The server can reject a stored token at any time (account deactivated, or
+  // a logout elsewhere invalidated it). Drop straight to the login screen
+  // rather than leaving the user in an app where nothing loads.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setToken(null);
+      setUser(null);
+      Alert.alert("Session expired", "Please log in again to continue.");
+    });
+
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const checkLogin = async () => {

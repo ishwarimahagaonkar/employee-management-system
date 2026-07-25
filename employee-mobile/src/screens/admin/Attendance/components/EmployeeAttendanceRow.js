@@ -35,7 +35,8 @@ export default function EmployeeAttendanceRow({ employee, record, onPress }) {
     ? record.status
     : "present"; // covers "present" and emergency-"approved" records
   const style = STATUS_STYLE[status];
-  const hasPhoto = !!(record?.punchInPhoto || record?.punchOutPhoto);
+  // The list no longer carries the images themselves, just these flags.
+  const hasPhoto = !!(record?.hasPunchInPhoto || record?.hasPunchOutPhoto);
 
   return (
     <TouchableOpacity

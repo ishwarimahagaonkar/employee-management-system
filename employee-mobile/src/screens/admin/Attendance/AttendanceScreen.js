@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  RefreshControl,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +17,8 @@ import api from "../../../api/api.js";
 import EmployeeAttendanceRow from "./components/EmployeeAttendanceRow";
 import EmergencyRequestCard from "./components/EmergencyRequestCard";
 import AttendancePhotoModal from "./components/AttendancePhotoModal";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const getTodayStr = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -25,12 +28,17 @@ export default function AttendanceScreen({ navigation }) {
   const [employees, setEmployees] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [tab, setTab] = useState("today");
+  const [error, setError] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedRecord, setSelectedRecord] = useState(null);
 
   const fetchData = async () => {
     try {
+      setError(null);
+
       const [employeesRes, attendanceRes] = await Promise.all([
         api.get("/employees"),
         api.get("/attendance"),
@@ -39,9 +47,21 @@ export default function AttendanceScreen({ navigation }) {
       setEmployees(employeesRes.data?.employees || []);
       setAttendance(attendanceRes.data?.attendance || []);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchData();
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -64,11 +84,32 @@ export default function AttendanceScreen({ navigation }) {
   const absentCount = Math.max(employees.length - presentCount - lateCount - pendingCount, 0);
 
   const resolveEmergency = async (record, action) => {
+    // Ignore taps while another decision is still being saved.
+    if (pending) return;
+
     try {
-      await api.put(`/attendance/emergency/${record._id}`, { action });
-      fetchData();
+      setPending({ id: record._id, action });
+
+      const res = await api.put(`/attendance/emergency/${record._id}`, { action });
+      const updated = res.data?.attendance;
+
+      // Patch the one record locally instead of refetching both lists -- the
+      // decision then lands immediately rather than after two more requests.
+      // userId is kept from the existing row because the response returns it
+      // unpopulated (an id, not the employee object the list renders).
+      if (updated?._id) {
+        setAttendance((prev) =>
+          prev.map((a) =>
+            a._id === updated._id ? { ...a, ...updated, userId: a.userId } : a
+          )
+        );
+      } else {
+        await fetchData();
+      }
     } catch (err) {
-      Alert.alert("Error", "Failed to update request");
+      Alert.alert("Error", getApiErrorMessage(err));
+    } finally {
+      setPending(null);
     }
   };
 
@@ -138,12 +179,17 @@ export default function AttendanceScreen({ navigation }) {
 
       {loading ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : tab === "today" ? (
         <FlatList
           data={employees}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#112250"]} tintColor="#112250" />
+          }
           ListEmptyComponent={<Text style={styles.emptyText}>No employees found</Text>}
           renderItem={({ item }) => (
             <EmployeeAttendanceRow
@@ -159,9 +205,17 @@ export default function AttendanceScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#112250"]} tintColor="#112250" />
+          }
           ListEmptyComponent={<Text style={styles.emptyText}>No pending emergency requests</Text>}
           renderItem={({ item }) => (
-            <EmergencyRequestCard record={item} onApprove={handleApprove} onReject={handleReject} />
+            <EmergencyRequestCard
+              record={item}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              pendingAction={pending?.id === item._id ? pending.action : null}
+            />
           )}
         />
       )}

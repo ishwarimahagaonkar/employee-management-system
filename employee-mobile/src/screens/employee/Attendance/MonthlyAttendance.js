@@ -14,12 +14,15 @@ import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../../api/api.js";
 import { formatHoursToHMS } from "../../../utils/formatTime.js";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError.js";
 
 export default function MonthlyAttendance() {
   const [markedDates, setMarkedDates] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(null);
   const [attendanceData, setAttendanceData] = useState([]);
+  const [error, setError] = useState(null);
 
   const navigation = useNavigation();
 
@@ -38,6 +41,7 @@ export default function MonthlyAttendance() {
   // ---------------- FETCH ATTENDANCE ----------------
   const fetchAttendance = async () => {
     try {
+      setError(null);
       const token = await AsyncStorage.getItem("token");
 
       const res = await api.get("/attendance/my-attendance", {
@@ -79,6 +83,7 @@ export default function MonthlyAttendance() {
 
       setMarkedDates(formatted);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -117,6 +122,8 @@ export default function MonthlyAttendance() {
       {/* CALENDAR */}
       {loading ? (
         <ActivityIndicator size="large" color="#112250" />
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchAttendance} compact />
       ) : (
         <Calendar
           markingType={"custom"}

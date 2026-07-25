@@ -16,6 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../../api/api.js";
 import EmployeeListItem from "./components/EmployeeListItem";
 import EmployeeFormModal from "./components/EmployeeFormModal";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 export default function EmployeesScreen({ navigation }) {
   const [employees, setEmployees] = useState([]);
@@ -23,15 +25,24 @@ export default function EmployeesScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [error, setError] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
 
   const fetchEmployees = async () => {
     try {
+      setError(null);
       const res = await api.get("/employees");
       setEmployees(res.data.employees || []);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchEmployees();
   };
 
   useEffect(() => {
@@ -90,24 +101,64 @@ export default function EmployeesScreen({ navigation }) {
     }
   };
 
+  // Spells out that deleting also erases history, and points at the
+  // reversible alternative -- deleting is permanent and unrecoverable.
+  const deleteWarning = (employee) =>
+    `Permanently delete ${employee.fullName}?\n\n` +
+    `This also erases all of their attendance records, trips and leave requests. ` +
+    `Past reports that included them will change, and this cannot be undone.\n\n` +
+    `To just stop their access instead, use Deactivate — their records are kept.`;
+
   const handleDelete = (employee) => {
     // Alert.alert's multi-button confirm doesn't work on react-native-web,
     // so fall back to window.confirm there.
     if (Platform.OS === "web") {
-      if (window.confirm(`Remove ${employee.fullName} from the system?`)) {
+      if (window.confirm(deleteWarning(employee))) {
         removeEmployee(employee);
       }
       return;
     }
 
-    Alert.alert(
-      "Delete Employee",
-      `Remove ${employee.fullName} from the system?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => removeEmployee(employee) },
-      ]
-    );
+    Alert.alert("Delete Employee", deleteWarning(employee), [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete Permanently", style: "destructive", onPress: () => removeEmployee(employee) },
+    ]);
+  };
+
+  const setActive = async (employee, isActive) => {
+    try {
+      setTogglingId(employee._id);
+      await api.put(`/employees/${employee._id}`, { isActive });
+      await fetchEmployees();
+    } catch (err) {
+      Alert.alert("Error", getApiErrorMessage(err));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleToggleActive = (employee) => {
+    const isInactive = employee.isActive === false;
+
+    const title = isInactive ? "Reactivate Employee" : "Deactivate Employee";
+    const message = isInactive
+      ? `Let ${employee.fullName} log in again?`
+      : `Stop ${employee.fullName} from logging in?\n\n` +
+        `They'll be signed out immediately and won't appear as a co-traveler option. ` +
+        `All their records are kept, and you can reactivate them any time.`;
+
+    if (Platform.OS === "web") {
+      if (window.confirm(message)) setActive(employee, isInactive);
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: isInactive ? "Reactivate" : "Deactivate",
+        onPress: () => setActive(employee, isInactive),
+      },
+    ]);
   };
 
   const filtered = employees.filter((e) =>
@@ -143,6 +194,8 @@ export default function EmployeesScreen({ navigation }) {
 
       {loading ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : (
         <FlatList
           data={filtered}
@@ -151,7 +204,13 @@ export default function EmployeesScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={<Text style={styles.emptyText}>No employees found</Text>}
           renderItem={({ item }) => (
-            <EmployeeListItem employee={item} onEdit={openEdit} onDelete={handleDelete} />
+            <EmployeeListItem
+              employee={item}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onToggleActive={handleToggleActive}
+              busy={togglingId === item._id}
+            />
           )}
         />
       )}

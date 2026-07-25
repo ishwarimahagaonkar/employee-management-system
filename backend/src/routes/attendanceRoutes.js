@@ -7,6 +7,7 @@ const {
     requestEmergency,
     approveEmergency,
     getAttendanceByUser,
+    getAttendancePhotos,
     getMonthlyAttendance,
     getMyAttendance,
     getTodayAttendance
@@ -38,4 +39,8 @@ router.get(
   protect,
   getTodayAttendance
 );
+
+// Declared after the static routes so it can't swallow them.
+router.get("/:id/photos", protect, adminOnly, getAttendancePhotos);
+
 module.exports = router;

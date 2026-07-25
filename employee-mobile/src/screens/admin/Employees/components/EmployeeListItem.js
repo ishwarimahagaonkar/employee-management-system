@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const initials = (name) =>
@@ -10,15 +10,25 @@ const initials = (name) =>
     .map((part) => part[0].toUpperCase())
     .join("");
 
-export default function EmployeeListItem({ employee, onEdit, onDelete }) {
+export default function EmployeeListItem({ employee, onEdit, onDelete, onToggleActive, busy }) {
+  // Only an explicit false means deactivated; older records have no flag.
+  const isInactive = employee.isActive === false;
+
   return (
-    <View style={styles.card}>
-      <View style={styles.avatar}>
+    <View style={[styles.card, isInactive && styles.cardInactive]}>
+      <View style={[styles.avatar, isInactive && styles.avatarInactive]}>
         <Text style={styles.avatarText}>{initials(employee.fullName)}</Text>
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.name}>{employee.fullName}</Text>
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, isInactive && styles.nameInactive]}>{employee.fullName}</Text>
+          {isInactive && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Inactive</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.email}>{employee.email}</Text>
         <Text style={styles.meta}>
           {[employee.department, employee.designation].filter(Boolean).join(" • ")}
@@ -29,6 +39,25 @@ export default function EmployeeListItem({ employee, onEdit, onDelete }) {
         <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(employee)}>
           <Ionicons name="create-outline" size={18} color="#112250" />
         </TouchableOpacity>
+
+        {/* Deactivate is the safe alternative to deleting: it blocks their
+            login and hides them from pickers, but keeps their records. */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => onToggleActive(employee)}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" color="#112250" />
+          ) : (
+            <Ionicons
+              name={isInactive ? "person-add-outline" : "person-remove-outline"}
+              size={18}
+              color={isInactive ? "#16A34A" : "#D97706"}
+            />
+          )}
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.actionBtn} onPress={() => onDelete(employee)}>
           <Ionicons name="trash-outline" size={18} color="#EF4444" />
         </TouchableOpacity>
@@ -52,6 +81,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
 
+  cardInactive: {
+    backgroundColor: "#F8FAFC",
+    opacity: 0.85,
+  },
+
   avatar: {
     width: 44,
     height: 44,
@@ -60,6 +94,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+  },
+
+  avatarInactive: {
+    backgroundColor: "#E5E7EB",
+  },
+
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  nameInactive: {
+    color: "#6B7280",
+  },
+
+  badge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#D97706",
   },
 
   avatarText: {
@@ -97,9 +158,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: 6,
   },
 });

@@ -8,13 +8,18 @@ import MeetingDetailsModal from "./components/MeetingDetailsModal";
 import TripDetailModal from "./components/TripDetailModal";
 import CoTravelerPickerModal from "./components/CoTravelerPickerModal";
 import useTravel from "./hooks/useTravel";
+import ErrorState from "../../../components/ErrorState";
 
 export default function TravelScreen() {
   const {
     todayTravel,
     history,
+    historyTotal,
     loading,
     historyLoading,
+    error,
+    historyError,
+    retry,
     activeTrip,
     pendingMeetingTrip,
     btnLoading,
@@ -34,6 +39,14 @@ export default function TravelScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#112250" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <ErrorState message={error} onRetry={retry} />
       </View>
     );
   }
@@ -71,10 +84,19 @@ export default function TravelScreen() {
       />
 
       <View style={styles.historySection}>
-        <Text style={styles.historyTitle}>Travel History</Text>
+        <View style={styles.historyTitleRow}>
+          <Text style={styles.historyTitle}>Travel History</Text>
+          {historyTotal > history.length && (
+            <Text style={styles.historyCount}>
+              Latest {history.length} of {historyTotal}
+            </Text>
+          )}
+        </View>
 
         {historyLoading ? (
           <ActivityIndicator size="large" color="#112250" />
+        ) : historyError ? (
+          <ErrorState message={historyError} onRetry={retry} compact />
         ) : history.length === 0 ? (
           <Text style={styles.emptyText}>No travel records found</Text>
         ) : (
@@ -130,11 +152,22 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  historyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+
   historyTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: "#1E1B4B",
-    marginBottom: 14,
+  },
+
+  historyCount: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
 
   emptyText: {

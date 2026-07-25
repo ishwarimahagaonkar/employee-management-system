@@ -8,6 +8,7 @@ const Travel = require("../models/Travel");
 const bcrypt = require("bcryptjs");
 const { defaultHolidaysForYear } = require("../utils/defaultHolidays");
 const { validatePassword, isValidEmail } = require("../utils/validators");
+const { deletePunchPhotos } = require("../utils/photoStorage");
 
 const VALID_PLANS = ["Standard", "Premium"];
 
@@ -264,6 +265,13 @@ exports.deleteCompany = async (req, res) => {
         }
 
         const companyId = req.params.id;
+
+        // Punch photo files first -- the records referencing them are about
+        // to go, and orphaned images would sit on disk forever.
+        const photoRows = await Attendance.find({ companyId })
+            .select("punchInPhoto punchOutPhoto")
+            .lean();
+        deletePunchPhotos(photoRows.flatMap((r) => [r.punchInPhoto, r.punchOutPhoto]));
 
         // Cascade: remove everything scoped to this company so nothing is left
         // orphaned when the company itself is gone.
