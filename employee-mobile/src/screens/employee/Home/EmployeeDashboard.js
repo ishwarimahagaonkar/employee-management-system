@@ -6,10 +6,11 @@ import { AuthContext } from "../../../context/AuthContext";
 import DashboardHeader from "./components/DashboardHeader";
 import StatCard from "./components/StatCard";
 import useDashboard from "./hooks/useDashboard";
+import ErrorState from "../../../components/ErrorState";
 
 export default function EmployeeDashboard() {
   const { user } = useContext(AuthContext);
-  const { loading, fullName, checkedIn, presentDays, lateMarks, leaveBalance, travelKm } = useDashboard();
+  const { loading, error, retry, fullName, checkedIn, presentDays, lateMarks, leaveBalance, travelKm } = useDashboard();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -18,6 +19,8 @@ export default function EmployeeDashboard() {
 
         {loading ? (
           <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={retry} compact />
         ) : (
           <View style={styles.statsGrid}>
             <StatCard

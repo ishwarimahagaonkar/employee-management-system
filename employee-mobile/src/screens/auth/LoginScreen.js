@@ -9,22 +9,40 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   ScrollView,
+  ActivityIndicator,
   Platform,
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { AuthContext } from "../../context/AuthContext.js";
+import { getApiErrorMessage } from "../../utils/apiError.js";
+
+// Read from app.json rather than hardcoded, so the footer can be trusted
+// when checking whether a phone is actually on the latest build.
+const APP_VERSION = Constants.expoConfig?.version || "unknown";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const {login} = useContext(AuthContext);
 
 const handleLogin = async () => {
+  if (loading) return;
+
+  if (!email.trim() || !password) {
+    setError("Enter your email and password.");
+    return;
+  }
+
   try {
+    setLoading(true);
+    setError(null);
 
     const res = await API.post("/auth/login", {
       email: email.trim(),
@@ -35,14 +53,19 @@ const handleLogin = async () => {
     const { token, user } = res.data;
 
     if (!token) {
-      alert("No token received from server");
+      setError("The server didn't return a login token. Please try again.");
       return;
     }
 
     await login(token, user);//Context handling storage and state
 
   } catch (err) {
-    alert(err.response?.data?.message || "Login failed");
+    // Shown inline rather than in an alert, and specific: a bare
+    // "Login failed" gave no way to tell a wrong password from the phone
+    // simply not reaching the server.
+    setError(getApiErrorMessage(err));
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -122,20 +145,34 @@ const handleLogin = async () => {
               </TouchableOpacity>
             </View>
 
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               activeOpacity={0.85}
+              disabled={loading}
             >
-              <Text style={styles.loginButtonText}>
-                Sign In
-              </Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.loginButtonText}>
+                    Sign In
+                  </Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
           <Text style={styles.footer}>
-            @2026 StaffTrack • all rights reserved.{"\n"} version 1.0.0
+            @2026 StaffTrack • all rights reserved.{"\n"} version {APP_VERSION}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -259,11 +296,34 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+
   loginButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
     marginRight: 8,
+  },
+
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+  },
+
+  errorText: {
+    flex: 1,
+    color: "#B91C1C",
+    fontSize: 13,
+    lineHeight: 18,
   },
 
   footer: {

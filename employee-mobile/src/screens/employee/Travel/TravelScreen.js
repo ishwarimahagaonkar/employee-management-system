@@ -5,14 +5,21 @@ import TravelHeader from "./components/TravelHeader";
 import TravelSummaryCard from "./components/TravelSummaryCard";
 import TravelHistoryCard from "./components/TravelHistoryCard";
 import MeetingDetailsModal from "./components/MeetingDetailsModal";
+import TripDetailModal from "./components/TripDetailModal";
+import CoTravelerPickerModal from "./components/CoTravelerPickerModal";
 import useTravel from "./hooks/useTravel";
+import ErrorState from "../../../components/ErrorState";
 
 export default function TravelScreen() {
   const {
     todayTravel,
     history,
+    historyTotal,
     loading,
     historyLoading,
+    error,
+    historyError,
+    retry,
     activeTrip,
     pendingMeetingTrip,
     btnLoading,
@@ -24,6 +31,9 @@ export default function TravelScreen() {
 
   const [purpose, setPurpose] = useState("");
   const [meetingModalVisible, setMeetingModalVisible] = useState(false);
+  const [detailTrip, setDetailTrip] = useState(null);
+  const [coTravelers, setCoTravelers] = useState([]);
+  const [coTravelerModalVisible, setCoTravelerModalVisible] = useState(false);
 
   if (loading) {
     return (
@@ -33,12 +43,23 @@ export default function TravelScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <ErrorState message={error} onRetry={retry} />
+      </View>
+    );
+  }
+
   const handleStart = () => {
     if (!purpose.trim()) {
       Alert.alert("Enter purpose");
       return;
     }
-    startTrip(purpose, () => setPurpose(""));
+    startTrip(purpose, coTravelers, () => {
+      setPurpose("");
+      setCoTravelers([]);
+    });
   };
 
   return (
@@ -50,6 +71,8 @@ export default function TravelScreen() {
         setPurpose={setPurpose}
         btnLoading={btnLoading}
         pendingMeetingTrip={pendingMeetingTrip}
+        coTravelerCount={coTravelers.length}
+        onAddCoTravelers={() => setCoTravelerModalVisible(true)}
         onStart={handleStart}
         onEnd={() => endTrip()}
         onAddMeeting={() => setMeetingModalVisible(true)}
@@ -61,15 +84,24 @@ export default function TravelScreen() {
       />
 
       <View style={styles.historySection}>
-        <Text style={styles.historyTitle}>Travel History</Text>
+        <View style={styles.historyTitleRow}>
+          <Text style={styles.historyTitle}>Travel History</Text>
+          {historyTotal > history.length && (
+            <Text style={styles.historyCount}>
+              Latest {history.length} of {historyTotal}
+            </Text>
+          )}
+        </View>
 
         {historyLoading ? (
           <ActivityIndicator size="large" color="#112250" />
+        ) : historyError ? (
+          <ErrorState message={historyError} onRetry={retry} compact />
         ) : history.length === 0 ? (
           <Text style={styles.emptyText}>No travel records found</Text>
         ) : (
           history.map((trip) => (
-            <TravelHistoryCard key={trip._id} trip={trip} />
+            <TravelHistoryCard key={trip._id} trip={trip} onPress={setDetailTrip} />
           ))
         )}
       </View>
@@ -81,6 +113,22 @@ export default function TravelScreen() {
         onSubmit={(details) =>
           logMeeting(pendingMeetingTrip._id, details, () => setMeetingModalVisible(false))
         }
+      />
+
+      <TripDetailModal
+        visible={!!detailTrip}
+        trip={detailTrip}
+        onClose={() => setDetailTrip(null)}
+      />
+
+      <CoTravelerPickerModal
+        visible={coTravelerModalVisible}
+        selectedIds={coTravelers}
+        onConfirm={(ids) => {
+          setCoTravelers(ids);
+          setCoTravelerModalVisible(false);
+        }}
+        onClose={() => setCoTravelerModalVisible(false)}
       />
     </ScrollView>
   );
@@ -104,11 +152,22 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  historyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+
   historyTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: "#1E1B4B",
-    marginBottom: 14,
+  },
+
+  historyCount: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
 
   emptyText: {

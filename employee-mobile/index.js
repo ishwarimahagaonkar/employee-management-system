@@ -1,5 +1,9 @@
 import { registerRootComponent } from 'expo';
 
+// Defines the background travel-tracking task; must be imported in global
+// scope so the task exists when the OS launches the app headless.
+import './src/tasks/travelTracking';
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

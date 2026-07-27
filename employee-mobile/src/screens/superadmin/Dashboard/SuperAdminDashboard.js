@@ -14,6 +14,8 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { AuthContext } from "../../../context/AuthContext";
 import api from "../../../api/api.js";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const PLAN_ORDER = ["Standard", "Premium"];
 
@@ -49,19 +51,27 @@ export default function SuperAdminDashboard({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchCompanies = useCallback(async ({ silent } = {}) => {
     if (silent) setRefreshing(true);
     try {
+      setError(null);
       const res = await api.get("/companies");
       setCompanies(res.data?.companies || []);
       setLastUpdated(new Date());
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
+  const retry = () => {
+    setLoading(true);
+    fetchCompanies();
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -146,6 +156,8 @@ export default function SuperAdminDashboard({ navigation }) {
 
         {loading ? (
           <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={retry} />
         ) : (
           <>
             <ScrollView

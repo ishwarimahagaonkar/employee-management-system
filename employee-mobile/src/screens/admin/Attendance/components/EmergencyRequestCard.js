@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const formatDate = (dateStr) => {
@@ -11,9 +11,14 @@ const formatDate = (dateStr) => {
   });
 };
 
-export default function EmergencyRequestCard({ record, onApprove, onReject }) {
+// pendingAction: "approve" | "reject" | null -- which action is in flight for
+// THIS record. Approving hits the server and then refetches, so without this
+// the card looks frozen and admins tap Approve repeatedly.
+export default function EmergencyRequestCard({ record, onApprove, onReject, pendingAction }) {
   const currentAddress =
     record.punchOutLocation?.address || record.punchInLocation?.address;
+
+  const busy = !!pendingAction;
 
   return (
     <View style={styles.card}>
@@ -42,11 +47,27 @@ export default function EmergencyRequestCard({ record, onApprove, onReject }) {
       )}
 
       <View style={styles.actions}>
-        <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => onReject(record)}>
-          <Text style={styles.rejectText}>Reject</Text>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.rejectBtn, busy && styles.btnDisabled]}
+          onPress={() => onReject(record)}
+          disabled={busy}
+        >
+          {pendingAction === "reject" ? (
+            <ActivityIndicator size="small" color="#DC2626" />
+          ) : (
+            <Text style={styles.rejectText}>Reject</Text>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => onApprove(record)}>
-          <Text style={styles.approveText}>Approve</Text>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.approveBtn, busy && styles.btnDisabled]}
+          onPress={() => onApprove(record)}
+          disabled={busy}
+        >
+          {pendingAction === "approve" ? (
+            <ActivityIndicator size="small" color="#16A34A" />
+          ) : (
+            <Text style={styles.approveText}>Approve</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -131,6 +152,10 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 12,
     alignItems: "center",
+  },
+
+  btnDisabled: {
+    opacity: 0.6,
   },
 
   rejectBtn: {

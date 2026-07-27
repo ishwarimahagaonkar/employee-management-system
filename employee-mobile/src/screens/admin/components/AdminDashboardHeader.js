@@ -20,7 +20,14 @@ const initials = (name) =>
     .map((part) => part[0].toUpperCase())
     .join("");
 
-export default function AdminDashboardHeader({ name, onMenuPress, attendanceRate, showProgress }) {
+export default function AdminDashboardHeader({
+  name,
+  onMenuPress,
+  attendanceRate,
+  showProgress,
+  onRefresh,
+  refreshing,
+}) {
   const [companyName, setCompanyName] = useState("");
 
   useEffect(() => {
@@ -58,8 +65,24 @@ export default function AdminDashboardHeader({ name, onMenuPress, attendanceRate
           <Ionicons name="menu" size={20} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.screenLabel}>Dashboard</Text>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials(name)}</Text>
+        <View style={styles.topBarRight}>
+          {!!onRefresh && (
+            <TouchableOpacity
+              onPress={onRefresh}
+              style={styles.refreshBtn}
+              disabled={refreshing}
+              accessibilityLabel="Refresh dashboard"
+            >
+              <Ionicons
+                name="refresh"
+                size={18}
+                color={refreshing ? "rgba(255,255,255,0.5)" : "#fff"}
+              />
+            </TouchableOpacity>
+          )}
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials(name)}</Text>
+          </View>
         </View>
       </View>
 
@@ -138,6 +161,21 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.85)",
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  topBarRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   avatar: {

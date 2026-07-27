@@ -23,12 +23,17 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   return R * c; // meters
 };
 
+// Treats a missing coordinate as "can't verify" -> false, but NOT a valid 0
+// coordinate (equator / prime meridian), which the old falsy check wrongly
+// rejected.
+const isValidCoord = (v) => typeof v === "number" && !isNaN(v);
+
 const isWithinOffice = (lat, lng, officeLat, officeLng, radius) => {
-  if (!lat || !lng) return false;
+  if (!isValidCoord(lat) || !isValidCoord(lng)) return false;
 
   const distance = getDistance(lat, lng, officeLat, officeLng);
 
   return distance <= radius;
 };
 
-module.exports = { getDistance, isWithinOffice };
+module.exports = { getDistance, isWithinOffice, isValidCoord };

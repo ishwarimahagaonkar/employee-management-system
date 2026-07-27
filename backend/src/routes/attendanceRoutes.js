@@ -3,9 +3,11 @@ const express = require("express");
 const {
     punchIn,
     punchOut,
+    sitePunchOut,
     requestEmergency,
     approveEmergency,
     getAttendanceByUser,
+    getAttendancePhotos,
     getMonthlyAttendance,
     getMyAttendance,
     getTodayAttendance
@@ -19,6 +21,7 @@ router.get("/my-attendance", protect, getMyAttendance);
 
 router.post("/punch-in", protect, punchIn);
 router.post("/punch-out", protect, punchOut);
+router.post("/site-punch-out", protect, sitePunchOut);
 
 router.post("/emergency-request", protect, requestEmergency);
 router.put("/emergency/:id", protect, adminOnly, approveEmergency);
@@ -36,4 +39,8 @@ router.get(
   protect,
   getTodayAttendance
 );
+
+// Declared after the static routes so it can't swallow them.
+router.get("/:id/photos", protect, adminOnly, getAttendancePhotos);
+
 module.exports = router;

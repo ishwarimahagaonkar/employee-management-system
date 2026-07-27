@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -7,6 +7,8 @@ import { AuthContext } from "../../context/AuthContext";
 import api from "../../api/api.js";
 import AdminDashboardHeader from "./components/AdminDashboardHeader";
 import DashboardStatCard from "./components/DashboardStatCard";
+import ErrorState from "../../components/ErrorState";
+import { getApiErrorMessage } from "../../utils/apiError";
 
 const QUICK_ACTIONS = [
   {
@@ -38,10 +40,12 @@ export default function AdminDashboard({ navigation }) {
   const { user } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, late: 0 });
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const fetchStats = async () => {
+  const fetchStats = async () => {
       try {
+        setError(null);
         const [employeesRes, attendanceRes] = await Promise.all([
           api.get("/employees"),
           api.get("/attendance"),
@@ -63,29 +67,51 @@ export default function AdminDashboard({ navigation }) {
 
         setStats({ total, present, absent, late });
       } catch (err) {
+        setError(getApiErrorMessage(err));
       } finally {
         setLoading(false);
       }
-    };
+  };
 
+  useEffect(() => {
     fetchStats();
   }, []);
+
+  const retry = () => {
+    setLoading(true);
+    fetchStats();
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchStats();
+    setRefreshing(false);
+  };
 
   const attendanceRate =
     stats.total > 0 ? Math.round(((stats.present + stats.late) / stats.total) * 100) : 0;
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#112250"]} tintColor="#112250" />
+        }
+      >
         <AdminDashboardHeader
           name={user?.fullName || "Admin"}
           onMenuPress={() => navigation.openDrawer()}
           attendanceRate={attendanceRate}
           showProgress={!loading}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
         />
 
         {loading ? (
           <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={retry} compact />
         ) : (
           <View style={styles.statsGrid}>
             <DashboardStatCard

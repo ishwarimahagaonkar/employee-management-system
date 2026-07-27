@@ -19,6 +19,7 @@ const emptyForm = {
   password: "",
   department: "",
   designation: "",
+  hourlyRate: "",
   JoiningDate: "",
   role: "employee",
 };
@@ -36,7 +37,8 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
         password: "",
         department: employee.department || "",
         designation: employee.designation || "",
-        JoiningDate: employee.JoiningDate || "",
+        hourlyRate: employee.hourlyRate != null ? String(employee.hourlyRate) : "",
+        JoiningDate: employee.joiningDate || employee.JoiningDate || "",
       });
     } else {
       setForm(emptyForm);
@@ -89,6 +91,20 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
               editable={!isEdit}
             />
 
+            {isEdit && (
+              <>
+                <Text style={styles.label}>Reset Password</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.password}
+                  onChangeText={update("password")}
+                  placeholder="Leave blank to keep current"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry
+                />
+              </>
+            )}
+
             {!isEdit && (
               <>
                 <Text style={styles.label}>Password</Text>
@@ -140,6 +156,17 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
               placeholder="Software Engineer"
               placeholderTextColor="#9CA3AF"
             />
+
+            <Text style={styles.label}>Hourly Rate</Text>
+            <TextInput
+              style={styles.input}
+              value={form.hourlyRate}
+              onChangeText={update("hourlyRate")}
+              placeholder="e.g. 250"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+
             <Text style={styles.label}>Joining Date</Text>
             <TextInput
               style={styles.input}

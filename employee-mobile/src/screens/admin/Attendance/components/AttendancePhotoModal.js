@@ -1,6 +1,18 @@
-import React from "react";
-import { View, Text, Image, TouchableOpacity, Modal, ScrollView, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  ActivityIndicator,
+  StyleSheet,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+import api from "../../../../api/api.js";
+import { getApiErrorMessage } from "../../../../utils/apiError.js";
 
 const formatTime = (isoDate) => {
   if (!isoDate) return "-";
@@ -11,7 +23,7 @@ const formatTime = (isoDate) => {
   });
 };
 
-function PhotoBlock({ label, time, photo }) {
+function PhotoBlock({ label, time, photo, loading }) {
   return (
     <View style={styles.block}>
       <View style={styles.blockHeader}>
@@ -19,7 +31,12 @@ function PhotoBlock({ label, time, photo }) {
         <Text style={styles.blockTime}>{formatTime(time)}</Text>
       </View>
 
-      {photo ? (
+      {loading ? (
+        <View style={styles.placeholder}>
+          <ActivityIndicator size="small" color="#112250" />
+          <Text style={styles.placeholderText}>Loading photo…</Text>
+        </View>
+      ) : photo ? (
         <Image source={{ uri: `data:image/jpeg;base64,${photo}` }} style={styles.photo} />
       ) : (
         <View style={styles.placeholder}>
@@ -32,6 +49,40 @@ function PhotoBlock({ label, time, photo }) {
 }
 
 export default function AttendancePhotoModal({ visible, employee, record, onClose }) {
+  // Photos are no longer bundled into the attendance list (they are megabytes
+  // each), so fetch them for this record when the sheet opens.
+  const [photos, setPhotos] = useState({ punchInPhoto: null, punchOutPhoto: null });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!visible || !record?._id) return;
+
+    let cancelled = false;
+    setPhotos({ punchInPhoto: null, punchOutPhoto: null });
+    setError(null);
+
+    // Nothing to fetch when the record has no photos at all.
+    if (!record.hasPunchInPhoto && !record.hasPunchOutPhoto) return;
+
+    setLoading(true);
+    api
+      .get(`/attendance/${record._id}/photos`)
+      .then((res) => {
+        if (!cancelled) setPhotos(res.data || {});
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getApiErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, record?._id]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -44,8 +95,20 @@ export default function AttendancePhotoModal({ visible, employee, record, onClos
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <PhotoBlock label="Punch In" time={record?.punchInTime} photo={record?.punchInPhoto} />
-            <PhotoBlock label="Punch Out" time={record?.punchOutTime} photo={record?.punchOutPhoto} />
+            {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+            <PhotoBlock
+              label="Punch In"
+              time={record?.punchInTime}
+              photo={photos.punchInPhoto}
+              loading={loading && record?.hasPunchInPhoto}
+            />
+            <PhotoBlock
+              label="Punch Out"
+              time={record?.punchOutTime}
+              photo={photos.punchOutPhoto}
+              loading={loading && record?.hasPunchOutPhoto}
+            />
           </ScrollView>
         </View>
       </View>
@@ -123,5 +186,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#9CA3AF",
     marginTop: 8,
+  },
+
+  errorText: {
+    fontSize: 13,
+    color: "#DC2626",
+    marginBottom: 12,
   },
 });

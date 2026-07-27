@@ -21,9 +21,12 @@ import api from "../../../api/api.js";
 import AttendanceCard from "./AttendanceCard.js";
 import MonthlyAttendance from "./MonthlyAttendance.js";
 import EmergencyRequestModal from "./EmergencyRequestModal.js";
+import ErrorState from "../../../components/ErrorState.js";
+import { getApiErrorMessage } from "../../../utils/apiError.js";
 
 export default function AttendanceScreen() {
   const [todayAttendance, setTodayAttendance] = useState(null);
+  const [todayTravel, setTodayTravel] = useState(null);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [markedDates, setMarkedDates] = useState({});
@@ -36,13 +39,23 @@ export default function AttendanceScreen() {
   const [pendingLocation, setPendingLocation] = useState(null);
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const cameraRef = useRef(null);   // ✅ Proper ref
+  const cameraReadyRef = useRef(false);
   const navigation = useNavigation();
 
   const hasPunchedIn =
     Boolean(todayAttendance?.punchInTime && !todayAttendance?.punchOutTime);
   const hasPunchedOut =
     Boolean(todayAttendance?.punchInTime && todayAttendance?.punchOutTime);
+
+  // A site punch-out is unlocked once the employee has submitted the meeting
+  // record for one of today's completed trips.
+  const meetingSubmitted = Boolean(
+    todayTravel?.trips?.some(
+      (t) => t.endTime && t.meetingDetails && t.meetingDetails.customerName
+    )
+  );
   
     
 
@@ -57,16 +70,19 @@ export default function AttendanceScreen() {
   // Unified fetch
   const fetchAttendanceData = async () => {
     try {
-      
+      setLoadError(null);
+
       const token = await AsyncStorage.getItem("token");
 
-      const [todayRes, historyRes] = await Promise.all([
+      const [todayRes, historyRes, travelRes] = await Promise.all([
         api.get("/attendance/today", { headers: { Authorization: `Bearer ${token}` } }),
         api.get("/attendance/my-attendance", { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/travel/today", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       setTodayAttendance(todayRes.data);
       setAttendanceHistory(historyRes.data);
+      setTodayTravel(travelRes.data?.data || null);
 
       // Format marked dates
       const formatted = {};
@@ -80,10 +96,16 @@ export default function AttendanceScreen() {
       });
       setMarkedDates(formatted);
     } catch (err) {
+      setLoadError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-    
+
+  };
+
+  const retryLoad = () => {
+    setLoading(true);
+    fetchAttendanceData();
   };
 
   useEffect(() => {
@@ -106,10 +128,7 @@ export default function AttendanceScreen() {
 
     try {
       setPunchLoading(true);
-      setShowCamera(true);
 
-    // Give camera a moment to start
-    await new Promise(resolve => setTimeout(resolve, 1000));
 // Camera permission
     const cameraPermission =
       await Camera.getCameraPermissionsAsync();
@@ -151,15 +170,48 @@ export default function AttendanceScreen() {
       );
       return;
     }
-      // Capture selfie
-      if (cameraRef.current) {
-        photo = await cameraRef.current.takePictureAsync({ base64: true });
+      // Show the camera and wait until it reports ready (up to 7s) instead
+      // of a fixed delay — takePictureAsync throws if the camera is still
+      // starting up, which made first punches of the day fail.
+      cameraReadyRef.current = false;
+      setShowCamera(true);
+      const readyDeadline = Date.now() + 7000;
+      while (!cameraReadyRef.current && Date.now() < readyDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // Capture selfie. Compressed: a full-quality photo is several MB of
+      // base64 and times out on slow mobile networks.
+      if (cameraRef.current && cameraReadyRef.current) {
+        photo = await cameraRef.current.takePictureAsync({
+          base64: true,
+          quality: 0.2,
+        });
 
         // Close camera after capture
         setShowCamera(false);
       }
-      // Get location
-      const location = await Location.getCurrentPositionAsync({});
+
+      // Get location: balanced accuracy with a timeout, falling back to the
+      // last known position so a cold GPS start doesn't fail the punch.
+      let location;
+      try {
+        location = await Promise.race([
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("location-timeout")), 10000)
+          ),
+        ]);
+      } catch (locErr) {
+        location = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
+        if (!location) {
+          throw new Error(
+            "Could not get your location. Please move to an open area and try again."
+          );
+        }
+      }
 
       let readableAddress = "Address unavailable";
 
@@ -200,7 +252,9 @@ export default function AttendanceScreen() {
           ...capturedLocation,
           photo: photo ? photo.base64 : null,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        // Longer timeout than the api default: this request carries the
+        // selfie payload and mobile uplinks can be slow.
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 }
       );
 
       alert(res.data.message);
@@ -211,8 +265,15 @@ export default function AttendanceScreen() {
         setPendingLocation(capturedLocation);
         setPendingPhoto(photo);
         setEmergencyModalVisible(true);
+      } else if (err.code === "ECONNABORTED" || err.message === "Network Error") {
+        // The server may have recorded the punch even though the response
+        // never arrived — refresh so the button state reflects reality.
+        alert(
+          "Network problem while submitting. Please check your internet connection and try again."
+        );
+        await fetchAttendanceData();
       } else {
-        alert(err.response?.data?.message || `${type} failed`);
+        alert(err.response?.data?.message || err.message || `${type} failed`);
       }
     } finally {
       setShowCamera(false);
@@ -269,6 +330,9 @@ export default function AttendanceScreen() {
                 style={{ width: "100%", height: "100%", borderRadius: 18 }}
                 ref={cameraRef}
                 facing="front"
+                onCameraReady={() => {
+                  cameraReadyRef.current = true;
+                }}
               />
             ) : punchLoading ? (
               <>
@@ -304,8 +368,54 @@ export default function AttendanceScreen() {
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Site punch-out: for employees finishing at the client site.
+              Enabled only after the trip's meeting record is submitted. */}
+          {hasPunchedIn && (
+            <>
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginTop: 12,
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: "rgba(255,255,255,0.55)",
+                  backgroundColor: meetingSubmitted ? "rgba(255,255,255,0.15)" : "transparent",
+                  opacity: meetingSubmitted && !punchLoading ? 1 : 0.55,
+                }}
+                disabled={!meetingSubmitted || punchLoading}
+                onPress={() => handlePunch("site-punch-out")}
+              >
+                <Ionicons name="briefcase-outline" size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+                  Punch Out from Site
+                </Text>
+              </TouchableOpacity>
+
+              {!meetingSubmitted && (
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.85)",
+                    fontSize: 12,
+                    marginTop: 8,
+                    textAlign: "center",
+                  }}
+                >
+                  Submit your trip's meeting record to enable site punch-out.
+                </Text>
+              )}
+            </>
+          )}
         </View>
       </View>
+
+      {!!loadError && !loading && (
+        <ErrorState message={loadError} onRetry={retryLoad} compact />
+      )}
 
       {/* Monthly Summary */}
       <View style={styles.summaryCard}>

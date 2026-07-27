@@ -1,10 +1,24 @@
 const PDFDocument = require("pdfkit");
 const User = require("../models/User");
 const Attendance = require("../models/Attendance");
+const Settings = require("../models/Settings");
+const { monthDateRange } = require("../utils/monthRange");
+
+// Only these statuses represent days the employee is actually paid for.
+const PAYABLE_STATUSES = ["present", "late", "approved"];
 
 exports.generateSalarySlip = async (req, res) => {
     try {
         const { userId, month, year } = req.query;
+
+        if (!userId || !month || !year || isNaN(Number(year))) {
+            return res.status(400).json({ message: "userId, month and year are required" });
+        }
+
+        const range = monthDateRange(month, year);
+        if (!range) {
+            return res.status(400).json({ message: "Invalid month or year" });
+        }
 
         const user = await User.findById(userId);
 
@@ -12,34 +26,21 @@ exports.generateSalarySlip = async (req, res) => {
             return res.status(404).json({ message: "Employee not found" });
         }
 
-        const records = await Attendance.find({ userId });
+        // Company name for the slip header comes from the company's settings,
+        // not a hardcoded string.
+        const settings = await Settings.findOne({ companyId: req.user.companyId ?? null });
+        const companyName = settings?.companyName || "Company";
 
-        const filtered = records.filter((att) => {
-            if (!att.date) return false;
-            const [y, m, d] = att.date.split("-");
-            if (y !== year.toString()) return false;
+        // Index-served range query for the month; only paid statuses count.
+        const filtered = await Attendance.find({
+            userId,
+            date: { $gte: range.gte, $lte: range.lte },
+            status: { $in: PAYABLE_STATUSES },
+        }).select("workingHours");
 
-            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-            const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+        const totalHours = filtered.reduce((sum, r) => sum + (r.workingHours || 0), 0);
 
-            const mIdx = parseInt(m, 10) - 1;
-            const recordMonthLong = monthNames[mIdx];
-            const recordMonthShort = shortMonthNames[mIdx];
-
-            const searchMonth = month.toString().toLowerCase();
-            return searchMonth === recordMonthLong ||
-                   searchMonth === recordMonthShort ||
-                   searchMonth === m ||
-                   parseInt(searchMonth, 10) === parseInt(m, 10);
-        });
-
-        let totalHours = 0;
-
-        filtered.forEach((r) => {
-            totalHours += r.workingHours || 0;
-        });
-
-        const hourlyRate = user.hourlyRate || 100;
+        const hourlyRate = user.hourlyRate || 0;
         const grossSalary = totalHours * hourlyRate;
 
         // simple structure like your file
@@ -69,7 +70,7 @@ exports.generateSalarySlip = async (req, res) => {
         doc.pipe(res);
 
         // HEADER
-        doc.fontSize(18).text("MEP POWERTECH PVT LTD", { align: "center" });
+        doc.fontSize(18).text(companyName, { align: "center" });
         doc.fontSize(10).text("PAY SLIP", { align: "center" });
         doc.moveDown();
 
@@ -84,6 +85,7 @@ exports.generateSalarySlip = async (req, res) => {
         doc.text("---- ATTENDANCE SUMMARY ----");
         doc.text(`Total Working Hours: ${totalHours.toFixed(2)}`);
         doc.text(`Working Days: ${filtered.length}`);
+        doc.text(`Hourly Rate: ${hourlyRate.toFixed(2)}`);
         doc.moveDown();
 
         // EARNINGS
@@ -114,6 +116,7 @@ exports.generateSalarySlip = async (req, res) => {
         doc.end();
 
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error("generateSalarySlip error:", err);
+        res.status(500).json({ message: "Server error" });
     }
 };

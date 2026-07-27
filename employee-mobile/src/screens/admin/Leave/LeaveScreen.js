@@ -15,19 +15,29 @@ import api from "../../../api/api.js";
 import LeaveStatCard from "./components/LeaveStatCard";
 import PendingApprovalCard from "./components/PendingApprovalCard";
 import LeaveHistoryCard from "./components/LeaveHistoryCard";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 export default function LeaveScreen({ navigation }) {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const fetchLeaves = async () => {
     try {
+      setError(null);
       const res = await api.get("/leave");
       setLeaves(res.data?.data || []);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchLeaves();
   };
 
   useEffect(() => {
@@ -68,6 +78,8 @@ export default function LeaveScreen({ navigation }) {
 
       {loading ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : (
         <FlatList
           data={leaves}

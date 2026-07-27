@@ -1,10 +1,23 @@
 const Attendance = require("../models/Attendance");
 const User = require("../models/User");
 const { calculateSalary } = require("../utils/salaryCalculator");
+const { monthDateRange } = require("../utils/monthRange");
+
+// Only these statuses represent days the employee is actually paid for.
+const PAYABLE_STATUSES = ["present", "late", "approved"];
 
 exports.calculateMonthlySalary = async (req, res) => {
     try {
         const { userId, month, year } = req.body;
+
+        if (!userId || !month || !year || isNaN(Number(year))) {
+            return res.status(400).json({ message: "userId, month and year are required" });
+        }
+
+        const range = monthDateRange(month, year);
+        if (!range) {
+            return res.status(400).json({ message: "Invalid month or year" });
+        }
 
         const employee = await User.findById(userId);
 
@@ -14,35 +27,16 @@ exports.calculateMonthlySalary = async (req, res) => {
             });
         }
 
-        // get all attendance records
-        const records = await Attendance.find({ userId });
+        // Index-served range query for the month; only paid statuses count.
+        const records = await Attendance.find({
+            userId,
+            date: { $gte: range.gte, $lte: range.lte },
+            status: { $in: PAYABLE_STATUSES },
+        }).select("workingHours");
 
-        const filtered = records.filter(record => {
-            if (!record.date) return false;
-            const [y, m, d] = record.date.split("-");
-            if (y !== year.toString()) return false;
+        const totalHours = records.reduce((sum, r) => sum + (r.workingHours || 0), 0);
 
-            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-            const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
-            const mIdx = parseInt(m, 10) - 1;
-            const recordMonthLong = monthNames[mIdx];
-            const recordMonthShort = shortMonthNames[mIdx];
-
-            const searchMonth = month.toString().toLowerCase();
-            return searchMonth === recordMonthLong ||
-                   searchMonth === recordMonthShort ||
-                   searchMonth === m ||
-                   parseInt(searchMonth, 10) === parseInt(m, 10);
-        });
-
-        let totalHours = 0;
-
-        filtered.forEach(record => {
-            totalHours += record.workingHours || 0;
-        });
-
-        const hourlyRate = employee.hourlyRate || 100; // default fallback
+        const hourlyRate = employee.hourlyRate || 0;
 
         const salary = calculateSalary(totalHours, hourlyRate);
 
@@ -54,8 +48,7 @@ exports.calculateMonthlySalary = async (req, res) => {
         });
 
     } catch (err) {
-        res.status(500).json({
-            message: err.message
-        });
+        console.error("calculateMonthlySalary error:", err);
+        res.status(500).json({ message: "Server error" });
     }
 };

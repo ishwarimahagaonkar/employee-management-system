@@ -54,7 +54,7 @@ exports.getHolidays = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -95,7 +95,7 @@ exports.createHoliday = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -122,7 +122,7 @@ exports.deleteHoliday = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };

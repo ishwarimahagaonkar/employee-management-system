@@ -41,10 +41,42 @@ const travelSchema = new mongoose.Schema({
                 default: 0
             },
 
+            // How distanceKm was computed:
+            //   gps      — summed from the recorded background GPS route (most accurate)
+            //   road     — routed road distance between start and end (OSRM)
+            //   straight — straight-line fallback
+            distanceSource: {
+                type: String,
+                enum: ["gps", "road", "straight"],
+                default: "straight"
+            },
+
+            // Thinned GPS route recorded during the trip (empty when
+            // background tracking was unavailable). Excluded from list
+            // endpoints via .select("-trips.route").
+            route: [
+                {
+                    _id: false,
+                    lat: Number,
+                    lng: Number,
+                    t: Number
+                }
+            ],
+
             durationMin: {
                 type: Number,
                 default: 0
             },
+
+            // Employees traveling with the trip creator. They are only linked
+            // to this trip -- they record no start/end/distance of their own and
+            // receive no km / reimbursement.
+            coTravelers: [
+                {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User"
+                }
+            ],
 
             meetingDetails: {
                 customerName: String,
@@ -67,5 +99,10 @@ const travelSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Per-user daily lookup (findOne by userId+date) and history.
+travelSchema.index({ userId: 1, date: 1 });
+// Admin list of a company's travel by date.
+travelSchema.index({ companyId: 1, date: -1 });
 
 module.exports = mongoose.model("Travel", travelSchema);

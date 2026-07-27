@@ -27,6 +27,8 @@ export default function TravelHeader({
   setPurpose,
   btnLoading,
   pendingMeetingTrip,
+  coTravelerCount = 0,
+  onAddCoTravelers,
   onStart,
   onEnd,
   onAddMeeting,
@@ -111,6 +113,16 @@ export default function TravelHeader({
               onChangeText={setPurpose}
               style={styles.input}
             />
+
+            <TouchableOpacity style={styles.coTravelBtn} onPress={onAddCoTravelers} disabled={btnLoading}>
+              <Ionicons name="people-outline" size={18} color="#fff" />
+              <Text style={styles.coTravelText}>
+                {coTravelerCount > 0
+                  ? `${coTravelerCount} co-traveler${coTravelerCount > 1 ? "s" : ""} added`
+                  : "Add co-travelers (optional)"}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionBtn} onPress={onStart} disabled={btnLoading}>
               <Text style={styles.actionText}>{btnLoading ? "Starting..." : "Confirm & Start Trip"}</Text>
@@ -210,7 +222,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     color: "#fff",
     fontSize: 14,
+    marginBottom: 12,
+  },
+
+  coTravelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     marginBottom: 18,
+    gap: 10,
+  },
+
+  coTravelText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   pendingText: {

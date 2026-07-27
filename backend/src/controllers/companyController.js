@@ -2,8 +2,13 @@ const Company = require("../models/Company");
 const User = require("../models/User");
 const Holiday = require("../models/Holiday");
 const Settings = require("../models/Settings");
+const Attendance = require("../models/Attendance");
+const Leave = require("../models/Leave");
+const Travel = require("../models/Travel");
 const bcrypt = require("bcryptjs");
 const { defaultHolidaysForYear } = require("../utils/defaultHolidays");
+const { validatePassword, isValidEmail } = require("../utils/validators");
+const { deletePunchPhotos } = require("../utils/photoStorage");
 
 const VALID_PLANS = ["Standard", "Premium"];
 
@@ -35,6 +40,15 @@ exports.createCompany = async (req, res) => {
             return res.status(400).json({
                 message: "Admin empID, fullName, email and password are required",
             });
+        }
+
+        if (!isValidEmail(email) || !isValidEmail(admin.email)) {
+            return res.status(400).json({ message: "Please provide valid company and admin email addresses" });
+        }
+
+        const adminPasswordError = validatePassword(admin.password);
+        if (adminPasswordError) {
+            return res.status(400).json({ message: adminPasswordError });
         }
 
         if (plan !== undefined && !VALID_PLANS.includes(plan)) {
@@ -110,7 +124,7 @@ exports.createCompany = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -130,7 +144,7 @@ exports.getAllCompanies = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -153,7 +167,7 @@ exports.getCompanyById = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -189,7 +203,7 @@ exports.updateCompany = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -231,7 +245,7 @@ exports.updateSubscription = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };
@@ -250,15 +264,35 @@ exports.deleteCompany = async (req, res) => {
             });
         }
 
-        await Company.findByIdAndDelete(req.params.id);
+        const companyId = req.params.id;
+
+        // Punch photo files first -- the records referencing them are about
+        // to go, and orphaned images would sit on disk forever.
+        const photoRows = await Attendance.find({ companyId })
+            .select("punchInPhoto punchOutPhoto")
+            .lean();
+        deletePunchPhotos(photoRows.flatMap((r) => [r.punchInPhoto, r.punchOutPhoto]));
+
+        // Cascade: remove everything scoped to this company so nothing is left
+        // orphaned when the company itself is gone.
+        await Promise.all([
+            User.deleteMany({ companyId }),
+            Attendance.deleteMany({ companyId }),
+            Leave.deleteMany({ companyId }),
+            Travel.deleteMany({ companyId }),
+            Holiday.deleteMany({ companyId }),
+            Settings.deleteMany({ companyId }),
+        ]);
+
+        await Company.findByIdAndDelete(companyId);
 
         return res.status(200).json({
-            message: "Company deleted successfully",
+            message: "Company and all its data deleted successfully",
         });
 
     } catch (error) {
         return res.status(500).json({
-            message: error.message,
+            message: "Server error",
         });
     }
 };

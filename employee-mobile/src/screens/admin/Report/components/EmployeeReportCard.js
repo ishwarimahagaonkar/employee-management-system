@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const initials = (name) =>
@@ -22,9 +22,9 @@ function Metric({ icon, iconColor, iconBg, value, label }) {
   );
 }
 
-export default function EmployeeReportCard({ employee, extraHours, unpaidLeaveDays, distanceKm }) {
+export default function EmployeeReportCard({ employee, extraHours, unpaidLeaveDays, distanceKm, onPress }) {
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => onPress?.(employee)} activeOpacity={0.7}>
       <View style={styles.topRow}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials(employee.fullName)}</Text>
@@ -35,6 +35,7 @@ export default function EmployeeReportCard({ employee, extraHours, unpaidLeaveDa
             {[employee.department, employee.designation].filter(Boolean).join(" • ")}
           </Text>
         </View>
+        <Ionicons name="chevron-forward" size={20} color="#C4C4CC" />
       </View>
 
       <View style={styles.metricsRow}>
@@ -60,7 +61,7 @@ export default function EmployeeReportCard({ employee, extraHours, unpaidLeaveDa
           label="Traveled"
         />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

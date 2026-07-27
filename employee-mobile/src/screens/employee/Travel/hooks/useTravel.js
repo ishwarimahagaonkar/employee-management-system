@@ -3,17 +3,32 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import api from "../../../../api/api.js";
 import { Alert } from "react-native";
+import { getApiErrorMessage } from "../../../../utils/apiError.js";
+import {
+  startTravelTracking,
+  stopTravelTracking,
+  clearTravelRoute,
+  stopTrackingIfStale,
+} from "../../../../tasks/travelTracking.js";
+
+// Most recent trips shown in the history list.
+const HISTORY_LIMIT = 5;
 
 export default function useTravel() {
   const [todayTravel, setTodayTravel] = useState(null);
   const [history, setHistory] = useState([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeTrip, setActiveTrip] = useState(false);
   const [btnLoading, setBtnLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [historyError, setHistoryError] = useState(null);
 
   const fetchTravel = async () => {
     try {
+      setError(null);
+
       const token = await AsyncStorage.getItem("token");
 
       const res = await api.get("/travel/today", {
@@ -27,8 +42,14 @@ export default function useTravel() {
       const trips = data?.trips || [];
       const lastTrip = trips[trips.length - 1];
 
-      setActiveTrip(lastTrip && !lastTrip.endTime);
+      const isActive = Boolean(lastTrip && !lastTrip.endTime);
+      setActiveTrip(isActive);
+
+      // If GPS recording is still running but no trip is active (trip ended
+      // on another device, app crash, …), stop it.
+      stopTrackingIfStale(isActive);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -48,11 +69,22 @@ export default function useTravel() {
         .flatMap((day) => (day.trips || []).map((trip) => ({ ...trip, date: day.date })))
         .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
-      setHistory(allTrips);
+      // Only the latest few on the screen -- the full list gets unwieldy fast.
+      setHistory(allTrips.slice(0, HISTORY_LIMIT));
+      setHistoryTotal(allTrips.length);
     } catch (err) {
+      setHistoryError(getApiErrorMessage(err));
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    fetchTravel();
+    fetchHistory();
   };
 
   useEffect(() => {
@@ -111,7 +143,7 @@ export default function useTravel() {
     return { lat: latitude, lng: longitude, address };
   };
 
-  const startTrip = async (purpose, onSuccess) => {
+  const startTrip = async (purpose, coTravelers = [], onSuccess) => {
     try {
       if (!purpose.trim()) {
         Alert.alert("Enter purpose");
@@ -125,9 +157,20 @@ export default function useTravel() {
 
       await api.post(
         "/travel/start",
-        { ...loc, purpose },
+        { ...loc, purpose, coTravelers },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      // Record the actual route in the background for accurate km. If the
+      // user declines "Allow all the time" location, the trip still works —
+      // distance falls back to the routed start→end estimate.
+      const tracking = await startTravelTracking();
+      if (!tracking) {
+        Alert.alert(
+          "Heads up",
+          'Background location is off, so distance will be estimated from start and end points only. For exact km, allow location "All the time" in Settings.'
+        );
+      }
 
       Alert.alert("Success", "Trip Started");
       await fetchTravel();
@@ -146,11 +189,20 @@ export default function useTravel() {
       const token = await AsyncStorage.getItem("token");
       const loc = await getLocation();
 
+      // Hand the recorded GPS route to the backend so it can sum the actual
+      // path driven. Empty when background tracking was off — the backend
+      // then falls back to the routed start→end distance. The stored route
+      // is only cleared after the server confirms, so a failed request can
+      // be retried without losing the recorded path.
+      const route = await stopTravelTracking();
+
       await api.post(
         "/travel/end",
-        { ...loc },
+        { ...loc, route },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      await clearTravelRoute();
 
       await fetchTravel();
       await fetchHistory();
@@ -204,8 +256,12 @@ export default function useTravel() {
   return {
     todayTravel,
     history,
+    historyTotal,
     loading,
     historyLoading,
+    error,
+    historyError,
+    retry,
     activeTrip,
     pendingMeetingTrip,
     btnLoading,

@@ -13,8 +13,13 @@ import LeaveHeader from "./components/LeaveHeader";
 import LeaveForm from "./components/LeaveForm";
 import LeaveHistoryCard from "./components/LeaveHistoryCard";
 import HolidayList from "./components/HolidayList";
+import ErrorState from "../../../components/ErrorState";
+import { getApiErrorMessage } from "../../../utils/apiError.js";
 
 const DEFAULT_PAID_ALLOTMENT = 12;
+
+// Most recent leave requests shown in the history list.
+const HISTORY_LIMIT = 5;
 
 const calculateDays = (startISO, endISO) => {
   const diff = new Date(endISO).getTime() - new Date(startISO).getTime();
@@ -27,6 +32,7 @@ export default function LeaveScreen() {
   const [paidAllotment, setPaidAllotment] = useState(DEFAULT_PAID_ALLOTMENT);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   const [leaveType, setLeaveType] = useState("Paid");
   const [startDate, setStartDate] = useState("");
@@ -36,13 +42,20 @@ export default function LeaveScreen() {
 
   const fetchLeaves = async () => {
     try {
+      setError(null);
       const res = await api.get("/leave/my-leaves");
       setLeaves(res.data.data || []);
     } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    fetchLeaves();
   };
 
   const fetchHolidays = async () => {
@@ -81,6 +94,11 @@ export default function LeaveScreen() {
     Paid: Math.max(paidAllotment - daysTaken("Paid"), 0),
     Unpaid: daysTaken("Unpaid"),
   };
+
+  // Newest first, capped -- balances above still count every record.
+  const recentLeaves = [...leaves]
+    .sort((a, b) => new Date(b.createdAt || b.startDate) - new Date(a.createdAt || a.startDate))
+    .slice(0, HISTORY_LIMIT);
 
   const resetForm = () => {
     setStartDate("");
@@ -155,14 +173,23 @@ export default function LeaveScreen() {
           <View style={styles.historySection}>
             <HolidayList holidays={holidays} />
 
-            <Text style={styles.historyTitle}>Leave History</Text>
+            <View style={styles.historyTitleRow}>
+              <Text style={styles.historyTitle}>Leave History</Text>
+              {leaves.length > recentLeaves.length && (
+                <Text style={styles.historyCount}>
+                  Latest {recentLeaves.length} of {leaves.length}
+                </Text>
+              )}
+            </View>
 
             {loading ? (
               <ActivityIndicator size="large" color="#3B82F6" />
-            ) : leaves.length === 0 ? (
+            ) : error ? (
+              <ErrorState message={error} onRetry={retry} compact />
+            ) : recentLeaves.length === 0 ? (
               <Text style={styles.emptyText}>No leave records found</Text>
             ) : (
-              leaves.map((item) => (
+              recentLeaves.map((item) => (
                 <LeaveHistoryCard key={item._id} leave={item} onCancel={cancelLeave} />
               ))
             )}

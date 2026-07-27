@@ -1,10 +1,14 @@
 // Attendance Model
 const Attendance = require("../models/Attendance");
 const Settings = require("../models/Settings");
+const Travel = require("../models/Travel");
 
 // Utility functions
-const { isWithinOffice } = require("../utils/locationCheck");
+const { isWithinOffice, isValidCoord } = require("../utils/locationCheck");
 const { calculateWorkingHours } = require("../utils/timeCalculator");
+const { getPagination } = require("../utils/pagination");
+const { monthDateRange } = require("../utils/monthRange");
+const { savePunchPhoto, readPunchPhoto } = require("../utils/photoStorage");
 
 const getOrgSettings = async (companyId) => {
   let settings = await Settings.findOne({ companyId: companyId ?? null });
@@ -64,8 +68,8 @@ exports.punchIn = async (req, res) => {
       });
     }
 
-    // Validate location data
-    if (!lat || !lng) {
+    // Validate location data (0 is a valid coordinate, so check type not truthiness)
+    if (!isValidCoord(lat) || !isValidCoord(lng)) {
       return res.status(400).json({
         message: "Location required for punch in",
       });
@@ -98,7 +102,7 @@ exports.punchIn = async (req, res) => {
         lng,
         address,
       },
-      punchInPhoto: photo,
+      punchInPhoto: savePunchPhoto(photo),
 
       status: attendanceStatus,
     });
@@ -130,6 +134,13 @@ exports.punchOut = async (req, res) => {
 
     const settings = await getOrgSettings(req.user.companyId);
 
+    // Validate location data (0 is a valid coordinate)
+    if (!isValidCoord(lat) || !isValidCoord(lng)) {
+      return res.status(400).json({
+        message: "Location required for punch out",
+      });
+    }
+
     // Verify employee location (unless GPS enforcement is off)
     const allowed = settings.enforceGps
       ? isWithinOffice(lat, lng, settings.officeLat, settings.officeLng, settings.geofenceRadius)
@@ -156,10 +167,18 @@ exports.punchOut = async (req, res) => {
       });
     }
 
+    // Prevent a second punch-out from overwriting the first (which would
+    // recompute and inflate working hours).
+    if (attendance.punchOutTime) {
+      return res.status(400).json({
+        message: "Already punched out today",
+      });
+    }
+
     // Store punch-out details
     attendance.punchOutTime = new Date();
     attendance.punchOutLocation = { lat, lng, address, };
-    attendance.punchOutPhoto = photo;
+    attendance.punchOutPhoto = savePunchPhoto(photo);
 
 
     // Calculate total working hours
@@ -178,7 +197,89 @@ exports.punchOut = async (req, res) => {
       attendance,
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+/**
+ * @desc Site Punch Out (from a client/site location)
+ * @route POST /attendance/site-punch-out
+ * @access Private
+ *
+ * For employees who finish at the client site and don't return to office.
+ * Unlike the normal punch-out, this BYPASSES the office geofence, but is only
+ * allowed once the employee has submitted a meeting record for one of today's
+ * completed trips. The punch-out is linked to that trip.
+ */
+exports.sitePunchOut = async (req, res) => {
+  try {
+    const { lat, lng, address, photo } = req.body;
+
+    // Location is still required and recorded (it's the client/site location).
+    if (!isValidCoord(lat) || !isValidCoord(lng)) {
+      return res.status(400).json({
+        message: "Location required for site punch out",
+      });
+    }
+
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+    // Require a completed trip today WITH a submitted meeting record. Meetings
+    // can only be logged after a trip ends, so a meeting implies the trip ended.
+    const travel = await Travel.findOne({ userId: req.user._id, date: todayStr });
+
+    const tripWithMeeting = travel
+      ? [...(travel.trips || [])].reverse().find(
+          (t) => t.endTime && t.meetingDetails && t.meetingDetails.customerName
+        )
+      : null;
+
+    if (!tripWithMeeting) {
+      return res.status(400).json({
+        message: "Submit the meeting record for your trip before punching out from the site.",
+        meetingRequired: true,
+      });
+    }
+
+    const attendance = await Attendance.findOne({
+      userId: req.user._id,
+      date: todayStr,
+    });
+
+    if (!attendance) {
+      return res.status(404).json({
+        message: "No punch in found",
+      });
+    }
+
+    if (attendance.punchOutTime) {
+      return res.status(400).json({
+        message: "Already punched out today",
+      });
+    }
+
+    const settings = await getOrgSettings(req.user.companyId);
+
+    // Record the site punch-out, linked to the trip/meeting. No geofence check.
+    attendance.punchOutTime = new Date();
+    attendance.punchOutLocation = { lat, lng, address };
+    attendance.punchOutPhoto = savePunchPhoto(photo);
+    attendance.sitePunchOut = true;
+    attendance.linkedTripId = tripWithMeeting._id;
+
+    const hours = calculateWorkingHours(attendance.punchInTime, attendance.punchOutTime);
+    attendance.workingHours = hours;
+    attendance.isHalfDay = hours < settings.halfDayHours;
+
+    await attendance.save();
+
+    res.status(200).json({
+      message: "Site punch out successful",
+      attendance,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -194,6 +295,17 @@ exports.punchOut = async (req, res) => {
 exports.requestEmergency = async (req, res) => {
   try {
     const { reason, type, lat, lng, address, photo } = req.body;
+
+    // Validate inputs before creating/updating a record.
+    if (!["punch-in", "punch-out"].includes(type)) {
+      return res.status(400).json({ message: "type must be 'punch-in' or 'punch-out'" });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: "A reason is required for an emergency request" });
+    }
+    if (!isValidCoord(lat) || !isValidCoord(lng)) {
+      return res.status(400).json({ message: "Location is required for an emergency request" });
+    }
 
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
@@ -215,7 +327,7 @@ exports.requestEmergency = async (req, res) => {
         date: todayStr,
         punchInTime: new Date(),
         punchInLocation: { lat, lng, address },
-        punchInPhoto: photo,
+        punchInPhoto: savePunchPhoto(photo),
         isOutsideLocation: true,
         emergencyRequest: true,
         emergencyReason: reason,
@@ -230,7 +342,7 @@ exports.requestEmergency = async (req, res) => {
 
       attendance.punchOutTime = new Date();
       attendance.punchOutLocation = { lat, lng, address };
-      attendance.punchOutPhoto = photo;
+      attendance.punchOutPhoto = savePunchPhoto(photo);
       attendance.isOutsideLocation = true;
       attendance.emergencyRequest = true;
       attendance.emergencyReason = reason;
@@ -252,7 +364,7 @@ exports.requestEmergency = async (req, res) => {
       attendance,
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -297,7 +409,7 @@ exports.approveEmergency = async (req, res) => {
       attendance,
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -309,18 +421,49 @@ exports.approveEmergency = async (req, res) => {
  */
 exports.getAttendanceByUser = async (req, res) => {
   try {
-    const attendance = await Attendance.find({ companyId: req.user.companyId ?? null })
-      .populate("userId", "fullName email department designation")
-      .sort({ punchInTime: -1 });
+    const filter = { companyId: req.user.companyId ?? null };
+    const { paginate, page, limit, skip } = getPagination(req.query);
+
+    // Punch selfies are base64 blobs measured in megabytes. Sending them with
+    // every row made this response tens of MB and pushed it past the app's
+    // request timeout. Rows carry only "is there a photo" flags; the images
+    // themselves are fetched per record by GET /attendance/:id/photos.
+    const pipeline = [{ $match: filter }, { $sort: { punchInTime: -1 } }];
+
+    if (paginate) {
+      pipeline.push({ $skip: skip }, { $limit: limit });
+    }
+
+    pipeline.push(
+      {
+        $addFields: {
+          hasPunchInPhoto: { $gt: [{ $strLenCP: { $ifNull: ["$punchInPhoto", ""] } }, 0] },
+          hasPunchOutPhoto: { $gt: [{ $strLenCP: { $ifNull: ["$punchOutPhoto", ""] } }, 0] },
+        },
+      },
+      { $project: { punchInPhoto: 0, punchOutPhoto: 0 } }
+    );
+
+    const [attendance, total] = await Promise.all([
+      Attendance.aggregate(pipeline),
+      Attendance.countDocuments(filter),
+    ]);
+
+    // Aggregation bypasses populate, so attach the employee details after.
+    await Attendance.populate(attendance, {
+      path: "userId",
+      select: "fullName email department designation",
+    });
 
     res.json({
       count: attendance.length,
+      total,
+      page: paginate ? page : 1,
       attendance,
     });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    console.error("getAttendanceByUser error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -340,32 +483,20 @@ exports.getMonthlyAttendance = async (req, res) => {
     const userId = req.user._id;
     const { month, year } = req.query;
 
-    const records = await Attendance.find({ userId });
+    const range = monthDateRange(month, year);
+    if (!range) {
+      return res.status(400).json({ message: "Valid month and year are required" });
+    }
 
-    const filtered = records.filter((att) => {
-      if (!att.date) return false;
-      const [y, m, d] = att.date.split("-");
-      if (y !== year.toString()) return false;
+    // Index-served range query for the month (no full-history scan).
+    const filtered = await Attendance.find({
+      userId,
+      date: { $gte: range.gte, $lte: range.lte },
+    })
+      .select("-punchInPhoto -punchOutPhoto")
+      .sort({ date: 1 });
 
-      const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-      const shortMonthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
-      const mIdx = parseInt(m, 10) - 1;
-      const recordMonthLong = monthNames[mIdx];
-      const recordMonthShort = shortMonthNames[mIdx];
-
-      const searchMonth = month.toString().toLowerCase();
-      return searchMonth === recordMonthLong ||
-             searchMonth === recordMonthShort ||
-             searchMonth === m ||
-             parseInt(searchMonth, 10) === parseInt(m, 10);
-    });
-
-    let totalHours = 0;
-
-    filtered.forEach((record) => {
-      totalHours += record.workingHours || 0;
-    });
+    const totalHours = filtered.reduce((sum, r) => sum + (r.workingHours || 0), 0);
 
     res.json({
       month,
@@ -375,9 +506,8 @@ exports.getMonthlyAttendance = async (req, res) => {
       attendance: filtered,
     });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    console.error("getMonthlyAttendance error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -389,15 +519,55 @@ exports.getMonthlyAttendance = async (req, res) => {
  */
 exports.getMyAttendance = async (req, res) => {
   try {
-    const attendance = await Attendance.find({
-      userId: req.user._id,
-    }).sort({ date: -1 });
+    // Returns a raw array for backward compatibility; ?page&limit paginate
+    // opt-in (still an array) so growing histories can be bounded.
+    const { paginate, limit, skip } = getPagination(req.query);
 
+    // Photos excluded: nothing in the employee UI renders them, and they are
+    // multi-megabyte base64 blobs.
+    let queryBuilder = Attendance.find({ userId: req.user._id })
+      .select("-punchInPhoto -punchOutPhoto")
+      .sort({ date: -1 });
+    if (paginate) {
+      queryBuilder = queryBuilder.skip(skip).limit(limit);
+    }
+
+    const attendance = await queryBuilder;
     res.json(attendance);
   } catch (err) {
     res.status(500).json({
-      message: err.message,
+      message: "Server error",
     });
+  }
+};
+
+
+/**
+ * @desc Get the punch photos for one attendance record
+ * @route GET /attendance/:id/photos
+ * @access Admin
+ *
+ * Kept separate from the list endpoints so the multi-megabyte base64 images
+ * are only transferred when an admin actually opens a record.
+ */
+exports.getAttendancePhotos = async (req, res) => {
+  try {
+    const record = await Attendance.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId ?? null,
+    }).select("punchInPhoto punchOutPhoto");
+
+    if (!record) {
+      return res.status(404).json({ message: "Attendance record not found" });
+    }
+
+    // Images live on disk; read them back only for this one record.
+    res.json({
+      punchInPhoto: readPunchPhoto(record.punchInPhoto),
+      punchOutPhoto: readPunchPhoto(record.punchOutPhoto),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -414,12 +584,12 @@ exports.getTodayAttendance = async (req, res) => {
     const attendance = await Attendance.findOne({
       userId: req.user._id,
       date: todayStr,
-    });
+    }).select("-punchInPhoto -punchOutPhoto");
 
     res.json(attendance);
   } catch (err) {
     res.status(500).json({
-      message: err.message,
+      message: "Server error",
     });
   }
 };

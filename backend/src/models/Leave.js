@@ -49,4 +49,9 @@ const leaveSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Per-user history + overlap checks query by userId and date range.
+leaveSchema.index({ userId: 1, startDate: 1, endDate: 1 });
+// Admin list of a company's leaves, newest first.
+leaveSchema.index({ companyId: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Leave", leaveSchema);
