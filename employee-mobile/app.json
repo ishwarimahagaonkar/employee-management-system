@@ -17,6 +17,9 @@
     },
     "android": {
       "package": "com.ishwarimahagaonkar.employeemanagementsystem",
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#112250"
