@@ -1,4 +1,19 @@
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
+
+// Verified account id from the Bearer token, or null when there isn't a valid
+// one. Verification (rather than a bare decode) means the key can't be spoofed
+// to mint unlimited buckets. Runs before `protect`, so it never assumes req.user.
+const tokenUserId = (req) => {
+    const header = req.headers.authorization || "";
+    if (!header.startsWith("Bearer ")) return null;
+
+    try {
+        return jwt.verify(header.slice(7), process.env.JWT_SECRET)?.id || null;
+    } catch (err) {
+        return null;
+    }
+};
 
 // Brute-force protection for login, keyed on the ACCOUNT being targeted
 // rather than the caller's IP.
@@ -42,11 +57,25 @@ const loginIpLimiter = rateLimit({
     },
 });
 
-// General safety net for the whole API surface to absorb runaway clients /
-// basic DoS: 300 requests per IP per minute.
+// General safety net for the whole API surface, to absorb runaway clients and
+// basic DoS: 300 requests per minute.
+//
+// Keyed on the signed-in ACCOUNT, for the same reason loginLimiter is: an office
+// WiFi or a carrier CGNAT puts the whole company behind one public address, so a
+// shared per-IP bucket is spent within seconds of the morning punch-in rush and
+// every employee then gets 429 on every request -- including login, since this
+// runs ahead of the auth routes. One person's runaway client must not be able to
+// lock out their colleagues.
+//
+// Unauthenticated traffic still falls back to IP; login has its own dedicated
+// per-account and per-IP limiters on top of this.
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 300,
+    keyGenerator: (req, res) => {
+        const userId = tokenUserId(req);
+        return userId ? `api-user:${userId}` : `api-ip:${ipKeyGenerator(req, res)}`;
+    },
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: "Too many requests. Please slow down." },

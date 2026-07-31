@@ -8,8 +8,17 @@ import TravelScreen from "./Travel/TravelScreen";
 import LeaveScreen from "./Leave/LeaveScreen";
 import ProfileScreen from "./ProfileScreen";
 import { AuthContext } from "../../context/AuthContext";
+import { withErrorBoundary } from "../../components/ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
+
+// Each tab is guarded on its own so a crash in one screen shows an error there
+// and leaves the tab bar -- and every other screen -- usable.
+const HomeTab = withErrorBoundary(EmployeeDashboard, "Home");
+const AttendanceTab = withErrorBoundary(AttendanceScreen, "Attendance");
+const TravelTab = withErrorBoundary(TravelScreen, "Travel");
+const LeaveTab = withErrorBoundary(LeaveScreen, "Leave");
+const ProfileTab = withErrorBoundary(ProfileScreen, "Profile");
 
 export default function BottomTabNavigator() {
   const { user } = useContext(AuthContext);
@@ -64,29 +73,29 @@ export default function BottomTabNavigator() {
      
       <Tab.Screen
         name="Home"
-        component={EmployeeDashboard}
+        component={HomeTab}
       />
 
       <Tab.Screen
         name="Attendance"
-        component={AttendanceScreen}
+        component={AttendanceTab}
       />
 
       {isPremium && (
         <Tab.Screen
           name="Travel"
-          component={TravelScreen}
+          component={TravelTab}
         />
       )}
 
       <Tab.Screen
         name="Leave"
-        component={LeaveScreen}
+        component={LeaveTab}
       />
 
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileTab}
       />
     </Tab.Navigator>
   );

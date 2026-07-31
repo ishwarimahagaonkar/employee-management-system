@@ -9,8 +9,13 @@ import api from "../api/api.js";
 
 import SuperAdminDashboard from "../screens/superadmin/Dashboard/SuperAdminDashboard";
 import CompaniesStackNavigator from "../screens/superadmin/Companies/CompaniesStackNavigator";
+import { withErrorBoundary } from "../components/ErrorBoundary";
 
 const Drawer = createDrawerNavigator();
+
+// Guarded per screen so a crash in one leaves the drawer and the other usable.
+const DashboardRoute = withErrorBoundary(SuperAdminDashboard, "Superadmin Dashboard");
+const CompaniesRoute = withErrorBoundary(CompaniesStackNavigator, "Companies");
 
 const NAV_ITEMS = [
   { name: "Dashboard", label: "Dashboard", icon: "grid-outline" },
@@ -94,8 +99,8 @@ export default function SuperAdminDrawerNavigator() {
       screenOptions={{ headerShown: false, drawerType: "front" }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
-      <Drawer.Screen name="Dashboard" component={SuperAdminDashboard} />
-      <Drawer.Screen name="Companies" component={CompaniesStackNavigator} />
+      <Drawer.Screen name="Dashboard" component={DashboardRoute} />
+      <Drawer.Screen name="Companies" component={CompaniesRoute} />
     </Drawer.Navigator>
   );
 }

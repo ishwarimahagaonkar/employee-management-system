@@ -15,8 +15,20 @@ import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
 import ReportScreen from "../screens/admin/Report/ReportScreen";
 import HolidaysScreen from "../screens/admin/Holidays/HolidaysScreen";
 import SettingsScreen from "../screens/admin/Settings/SettingsScreen";
+import { withErrorBoundary } from "../components/ErrorBoundary";
 
 const Drawer = createDrawerNavigator();
+
+// Guarded per screen so a crash in one shows an error there and leaves the
+// drawer -- and every other screen -- working.
+const DashboardRoute = withErrorBoundary(AdminDashboard, "Admin Dashboard");
+const EmployeesRoute = withErrorBoundary(EmployeesScreen, "Employees");
+const AttendanceRoute = withErrorBoundary(AttendanceScreen, "Attendance");
+const TravelRoute = withErrorBoundary(TravelStackNavigator, "Travel");
+const LeaveRoute = withErrorBoundary(LeaveScreen, "Leave");
+const HolidaysRoute = withErrorBoundary(HolidaysScreen, "Holidays");
+const ReportRoute = withErrorBoundary(ReportScreen, "Report");
+const SettingsRoute = withErrorBoundary(SettingsScreen, "Settings");
 
 const ALL_NAV_ITEMS = [
   { name: "Dashboard", label: "Dashboard", icon: "grid-outline" },
@@ -111,14 +123,14 @@ export default function AdminDrawerNavigator() {
       screenOptions={{ headerShown: false, drawerType: "front" }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
-      <Drawer.Screen name="Dashboard" component={AdminDashboard} />
-      <Drawer.Screen name="Employees" component={EmployeesScreen} />
-      <Drawer.Screen name="Attendance" component={AttendanceScreen} />
-      {isPremium && <Drawer.Screen name="Travel" component={TravelStackNavigator} />}
-      <Drawer.Screen name="Leave" component={LeaveScreen} />
-      <Drawer.Screen name="Holidays" component={HolidaysScreen} />
-      {isPremium && <Drawer.Screen name="Report" component={ReportScreen} />}
-      <Drawer.Screen name="Settings" component={SettingsScreen} />
+      <Drawer.Screen name="Dashboard" component={DashboardRoute} />
+      <Drawer.Screen name="Employees" component={EmployeesRoute} />
+      <Drawer.Screen name="Attendance" component={AttendanceRoute} />
+      {isPremium && <Drawer.Screen name="Travel" component={TravelRoute} />}
+      <Drawer.Screen name="Leave" component={LeaveRoute} />
+      <Drawer.Screen name="Holidays" component={HolidaysRoute} />
+      {isPremium && <Drawer.Screen name="Report" component={ReportRoute} />}
+      <Drawer.Screen name="Settings" component={SettingsRoute} />
     </Drawer.Navigator>
   );
 }
