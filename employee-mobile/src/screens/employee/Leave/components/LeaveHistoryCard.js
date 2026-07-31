@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { formatDateShort } from "../../../../utils/formatDate";
 
 const TYPE_ICON = {
   Paid: "cash-outline",
@@ -11,15 +12,6 @@ const STATUS_STYLE = {
   Pending: { bg: "#FEF3C7", text: "#D97706" },
   Approved: { bg: "#DCFCE7", text: "#16A34A" },
   Rejected: { bg: "#FEE2E2", text: "#DC2626" },
-};
-
-const formatDate = (isoDate) => {
-  if (!isoDate) return "-";
-  return new Date(isoDate).toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
 };
 
 export default function LeaveHistoryCard({ leave, onCancel }) {
@@ -45,11 +37,11 @@ export default function LeaveHistoryCard({ leave, onCancel }) {
       <View style={styles.dateRow}>
         <View style={styles.dateBlock}>
           <Text style={styles.dateLabel}>From</Text>
-          <Text style={styles.dateValue}>{formatDate(leave.startDate)}</Text>
+          <Text style={styles.dateValue}>{formatDateShort(leave.startDate)}</Text>
         </View>
         <View style={styles.dateBlock}>
           <Text style={styles.dateLabel}>To</Text>
-          <Text style={styles.dateValue}>{formatDate(leave.endDate)}</Text>
+          <Text style={styles.dateValue}>{formatDateShort(leave.endDate)}</Text>
         </View>
       </View>
 

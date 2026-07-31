@@ -47,20 +47,19 @@ export default function HolidaysScreen({ navigation }) {
     }, [])
   );
 
+  // Returns an error message for the form to display, or null once saved --
+  // the modal shows it inline, since an Alert raised over an open Modal can be
+  // hidden behind it on Android and strand the admin on a dead sheet.
   const handleSubmit = async (form, resetForm) => {
     try {
-      if (!form.date || !form.name.trim()) {
-        Alert.alert("Error", "Date and holiday name are required");
-        return;
-      }
-
       await api.post("/holidays", form);
 
       setModalVisible(false);
       resetForm();
       fetchHolidays();
+      return null;
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.message || "Failed to add holiday");
+      return getApiErrorMessage(err);
     }
   };
 

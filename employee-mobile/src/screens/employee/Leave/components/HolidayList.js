@@ -1,19 +1,10 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const formatDate = (isoDate) => {
-  if (!isoDate) return "-";
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "2-digit",
-    timeZone: "UTC",
-  });
-};
+import { formatDateWithWeekday } from "../../../../utils/formatDate";
 
 export default function HolidayList({ holidays }) {
-  if (!holidays.length) {
+  if (!holidays?.length) {
     return null;
   }
 
@@ -26,7 +17,7 @@ export default function HolidayList({ holidays }) {
 
       {holidays.map((h) => (
         <View key={h._id} style={styles.row}>
-          <Text style={styles.date}>{formatDate(h.date)}</Text>
+          <Text style={styles.date}>{formatDateWithWeekday(h.date)}</Text>
           <Text style={styles.name} numberOfLines={1}>{h.name}</Text>
         </View>
       ))}

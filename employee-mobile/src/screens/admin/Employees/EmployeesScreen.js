@@ -59,6 +59,10 @@ export default function EmployeesScreen({ navigation }) {
     setModalVisible(true);
   };
 
+  // Returns an error message for the form to display, or null once saved. The
+  // modal owns the field validation and shows failures inline -- Alert.alert
+  // can't be used while the form is open, since on Android the dialog may sit
+  // behind the modal and leave a dimmed sheet that swallows every tap.
   const handleSubmit = async (form) => {
     try {
       if (editingEmployee) {
@@ -78,17 +82,14 @@ export default function EmployeesScreen({ navigation }) {
           });
         }
       } else {
-        if (!form.empID || !form.fullName || !form.email || !form.password || !form.department || !form.designation || !form.JoiningDate) {
-          Alert.alert("Error", "All fields are required");
-          return;
-        }
         await api.post("/employees", form);
       }
 
       setModalVisible(false);
       fetchEmployees();
+      return null;
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.message || "Failed to save employee");
+      return getApiErrorMessage(err);
     }
   };
 

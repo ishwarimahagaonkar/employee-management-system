@@ -48,18 +48,23 @@ function Badge({ text }) {
   );
 }
 
+// Every section below reads straight off the API response. A missing section
+// used to take the whole screen down on a `.records.length` read, so each one
+// falls back to an empty shape and simply renders as empty instead.
+const EMPTY_LIST = { records: [], count: 0 };
+
 export default function ReportPreview({ report }) {
   const {
-    employee,
-    reportingPeriod,
+    employee = {},
+    reportingPeriod = {},
     generatedAt,
     generatedBy,
-    attendanceSummary: a,
-    holidaySummary,
-    leaveSummary,
-    travelSummary,
-    payrollImpact: p,
-  } = report;
+    attendanceSummary: a = {},
+    holidaySummary = EMPTY_LIST,
+    leaveSummary = EMPTY_LIST,
+    travelSummary = EMPTY_LIST,
+    payrollImpact: p = {},
+  } = report || {};
 
   return (
     <View>
@@ -86,10 +91,10 @@ export default function ReportPreview({ report }) {
       </SectionCard>
 
       <SectionCard title="3. Holidays">
-        {holidaySummary.records.length === 0 ? (
+        {(holidaySummary?.records || []).length === 0 ? (
           <Text style={styles.emptyText}>No holidays in this period.</Text>
         ) : (
-          holidaySummary.records.map((h, idx) => (
+          (holidaySummary?.records || []).map((h, idx) => (
             <View key={idx} style={styles.row}>
               <Text style={styles.rowLabel}>{h.date}</Text>
               <Text style={styles.rowValue}>{h.name}</Text>
@@ -97,14 +102,14 @@ export default function ReportPreview({ report }) {
           ))
         )}
         <View style={styles.divider} />
-        <Row label="Total Holidays (excluded from working days)" value={holidaySummary.count} />
+        <Row label="Total Holidays (excluded from working days)" value={holidaySummary?.count ?? 0} />
       </SectionCard>
 
       <SectionCard title="4. Leave Summary">
-        {leaveSummary.records.length === 0 ? (
+        {(leaveSummary?.records || []).length === 0 ? (
           <Text style={styles.emptyText}>No leave records in this period.</Text>
         ) : (
-          leaveSummary.records.map((l, idx) => (
+          (leaveSummary?.records || []).map((l, idx) => (
             <View key={idx} style={styles.leaveRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.leaveType}>{l.leaveType} Leave</Text>
@@ -124,10 +129,10 @@ export default function ReportPreview({ report }) {
       </SectionCard>
 
       <SectionCard title="5. Travel Summary">
-        {travelSummary.records.length === 0 ? (
+        {(travelSummary?.records || []).length === 0 ? (
           <Text style={styles.emptyText}>No travel records in this period.</Text>
         ) : (
-          travelSummary.records.map((t, idx) => (
+          (travelSummary?.records || []).map((t, idx) => (
             <TripTimeline key={idx} trip={t} index={idx} showDate />
           ))
         )}

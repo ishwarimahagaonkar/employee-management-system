@@ -1,17 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const formatDate = (isoDate) => {
-  if (!isoDate) return "-";
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-};
+import { formatDateWithWeekday } from "../../../../utils/formatDate";
 
 export default function HolidayListItem({ holiday, onDelete }) {
   return (
@@ -22,7 +12,7 @@ export default function HolidayListItem({ holiday, onDelete }) {
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{holiday.name}</Text>
-        <Text style={styles.date}>{formatDate(holiday.date)}</Text>
+        <Text style={styles.date}>{formatDateWithWeekday(holiday.date, { withYear: true })}</Text>
       </View>
 
       <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete?.(holiday)}>

@@ -7,6 +7,7 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
+  ActivityIndicator,
   Platform,
   StyleSheet,
 } from "react-native";
@@ -24,13 +25,29 @@ const emptyForm = {
   role: "employee",
 };
 
+// Mirrors the rules the API enforces, so a rejected save is caught here and
+// shown next to the field instead of costing a round trip.
+const PASSWORD_HINT = "At least 8 characters, including one letter and one number.";
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const passwordProblem = (password) => {
+  if (password.length < 8) return "Password must be at least 8 characters long.";
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return "Password must contain at least one letter and one number.";
+  }
+  return null;
+};
+
 export default function EmployeeFormModal({ visible, employee, onClose, onSubmit }) {
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
   const isEdit = !!employee;
 
   useEffect(() => {
     if (employee) {
       setForm({
+        ...emptyForm,
         empID: employee.empID || "",
         fullName: employee.fullName || "",
         email: employee.email || "",
@@ -39,13 +56,80 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
         designation: employee.designation || "",
         hourlyRate: employee.hourlyRate != null ? String(employee.hourlyRate) : "",
         JoiningDate: employee.joiningDate || employee.JoiningDate || "",
+        role: employee.role || "employee",
       });
     } else {
       setForm(emptyForm);
     }
+
+    setFormError(null);
+    setSubmitting(false);
   }, [employee, visible]);
 
   const update = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  // Returns the first problem with the form, or null when it's ready to send.
+  const validate = () => {
+    const required = isEdit
+      ? { "Employee ID": form.empID, "Full name": form.fullName, Department: form.department, Designation: form.designation }
+      : {
+          "Employee ID": form.empID,
+          "Full name": form.fullName,
+          Email: form.email,
+          Password: form.password,
+          Department: form.department,
+          Designation: form.designation,
+          "Joining date": form.JoiningDate,
+        };
+
+    const missing = Object.keys(required).filter((label) => !String(required[label]).trim());
+    if (missing.length) {
+      return `${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} required.`;
+    }
+
+    if (!isEdit && !EMAIL_REGEX.test(form.email.trim())) {
+      return "Enter a valid email address.";
+    }
+
+    // On edit the password field is an optional reset -- blank keeps the current one.
+    if (form.password) {
+      const weak = passwordProblem(form.password);
+      if (weak) return weak;
+    }
+
+    if (form.hourlyRate && (isNaN(Number(form.hourlyRate)) || Number(form.hourlyRate) < 0)) {
+      return "Hourly rate must be a number that isn't negative.";
+    }
+
+    if (form.JoiningDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.JoiningDate.trim())) {
+      return "Joining date must look like 2026-07-31.";
+    }
+
+    return null;
+  };
+
+  // Errors are shown inside the sheet rather than through Alert.alert: an alert
+  // raised while this Modal is open can land behind it on Android, leaving a
+  // dimmed form that ignores every tap and looks like the app has frozen.
+  const submit = async () => {
+    if (submitting) return;
+
+    const problem = validate();
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
+
+    setFormError(null);
+    setSubmitting(true);
+
+    try {
+      const failure = await onSubmit(form);
+      if (failure) setFormError(failure);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -56,12 +140,19 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
         <View style={styles.sheet}>
           <View style={styles.header}>
             <Text style={styles.title}>{isEdit ? "Edit Employee" : "Add Employee"}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color="#9CA3AF" />
+            <TouchableOpacity onPress={onClose} disabled={submitting}>
+              <Ionicons name="close" size={22} color={submitting ? "#E5E7EB" : "#9CA3AF"} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {!!formError && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{formError}</Text>
+              </View>
+            )}
+
             <Text style={styles.label}>Employee ID</Text>
             <TextInput
               style={styles.input}
@@ -102,6 +193,7 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry
                 />
+                {!!form.password && <Text style={styles.hint}>{PASSWORD_HINT}</Text>}
               </>
             )}
 
@@ -116,6 +208,7 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry
                 />
+                <Text style={styles.hint}>{PASSWORD_HINT}</Text>
 
                 <Text style={styles.label}>Role</Text>
                 <View style={styles.roleRow}>
@@ -176,8 +269,20 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
               placeholderTextColor="#9CA3AF"
             />
 
-            <TouchableOpacity style={styles.submitBtn} onPress={() => onSubmit(form)}>
-              <Text style={styles.submitText}>{isEdit ? "Save Changes" : "Create Employee"}</Text>
+            <TouchableOpacity
+              style={[styles.submitBtn, submitting && styles.submitBtnBusy]}
+              onPress={submit}
+              disabled={submitting}
+              activeOpacity={0.8}
+            >
+              {submitting ? (
+                <View style={styles.submitBusyRow}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.submitText}>{isEdit ? "Saving..." : "Creating..."}</Text>
+                </View>
+              ) : (
+                <Text style={styles.submitText}>{isEdit ? "Save Changes" : "Create Employee"}</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -219,6 +324,33 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginBottom: 6,
+  },
+
+  hint: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: -10,
+    marginBottom: 16,
+  },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#B91C1C",
+    lineHeight: 18,
   },
 
   input: {
@@ -271,6 +403,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
     marginBottom: 20,
+  },
+
+  submitBtnBusy: {
+    opacity: 0.75,
+  },
+
+  submitBusyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 
   submitText: {
