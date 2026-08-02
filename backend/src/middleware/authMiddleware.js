@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Company = require("../models/Company");
+const { can, isStaffRole } = require("../config/roles");
 
 // VERIFY TOKEN
 exports.protect = async (req, res, next) => {
@@ -69,6 +70,52 @@ exports.adminOnly = (req, res, next) => {
     if (!req.user || req.user.role !== "admin") {
         return res.status(403).json({
             message: "Admin access only",
+        });
+    }
+
+    next();
+};
+
+
+// ROLE ALLOWLIST
+// Added alongside adminOnly rather than replacing it: every existing route
+// keeps its original guard, and only routes that genuinely need a wider or
+// narrower audience move over to this one.
+exports.authorize = (...allowedRoles) => (req, res, next) => {
+
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+        return res.status(403).json({
+            message: "You don't have permission to do that",
+        });
+    }
+
+    next();
+};
+
+
+// PERMISSION CHECK (see config/roles.js for the matrix)
+// Preferred over listing roles inline: when a permission moves between roles
+// there is one place to change, and the mobile menus read the same matrix.
+exports.requirePermission = (permission) => (req, res, next) => {
+
+    if (!req.user || !can(req.user.role, permission)) {
+        return res.status(403).json({
+            message: "You don't have permission to do that",
+        });
+    }
+
+    next();
+};
+
+
+// STAFF ONLY (blocks admins from punching, travelling and taking leave)
+// Admins administer; they don't attend. Kept as its own guard so the reason a
+// request was refused is obvious in the response.
+exports.staffOnly = (req, res, next) => {
+
+    if (!req.user || !isStaffRole(req.user.role)) {
+        return res.status(403).json({
+            message: "Admin accounts don't record attendance or travel.",
         });
     }
 

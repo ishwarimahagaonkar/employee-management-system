@@ -27,6 +27,18 @@ const companyRoutes = require("./src/routes/companyRoutes");
 
 const holidayRoutes = require("./src/routes/holidayRoutes");
 
+const siteRoutes = require("./src/routes/siteRoutes");
+
+const labourRoutes = require("./src/routes/labourRoutes");
+
+const labourAttendanceRoutes = require("./src/routes/labourAttendanceRoutes");
+
+const dailyReportRoutes = require("./src/routes/dailyReportRoutes");
+
+const labourReportRoutes = require("./src/routes/labourReportRoutes");
+
+const dashboardRoutes = require("./src/routes/dashboardRoutes");
+
 const { apiLimiter } = require("./src/middleware/rateLimiter");
 const sanitize = require("./src/middleware/sanitize");
 
@@ -80,6 +92,16 @@ if (allowedOrigins.length > 0) {
 app.use(express.json({limit:"10mb"}));
 app.use(express.urlencoded({limit:"10mb", extended: true}));
 
+// Express 5 leaves req.body as undefined when a request carries no body (v4
+// defaulted it to {}). Every controller that does `const { x } = req.body`
+// then throws a TypeError, so a client sending no body gets a 500 and a stack
+// trace in the logs instead of a clean validation error. Defaulted once here
+// rather than guarding at 26 separate destructuring sites.
+app.use((req, res, next) => {
+    if (req.body === undefined) req.body = {};
+    next();
+});
+
 // Strip Mongo operators from user input (NoSQL-injection guard).
 app.use(sanitize);
 
@@ -111,6 +133,18 @@ app.use("/api/report", reportRoutes);
 app.use("/api/companies", companyRoutes);
 
 app.use("/api/holidays", holidayRoutes);
+
+app.use("/api/sites", siteRoutes);
+
+app.use("/api/labour", labourRoutes);
+
+app.use("/api/labour-attendance", labourAttendanceRoutes);
+
+app.use("/api/daily-reports", dailyReportRoutes);
+
+app.use("/api/labour-reports", labourReportRoutes);
+
+app.use("/api/dashboard", dashboardRoutes);
 
 
 // JSON 404 for any unmatched route (instead of Express's default HTML page).

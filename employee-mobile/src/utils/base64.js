@@ -1,5 +1,27 @@
 const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/**
+ * Reads an arraybuffer response back as text.
+ *
+ * A request made with `responseType: "arraybuffer"` gets a buffer even when the
+ * server answers with a JSON error, so the message is unreadable without this.
+ * Buffer/TextDecoder can't be relied on under Hermes (see the note below), and
+ * spreading a large byte array into String.fromCharCode overflows the stack --
+ * hence the manual chunked loop.
+ *
+ * Decodes as latin1, which is exact for the ASCII JSON our API returns.
+ */
+export function arrayBufferToText(buffer) {
+  const bytes = new Uint8Array(buffer || []);
+  let out = "";
+
+  for (let i = 0; i < bytes.length; i += 4096) {
+    out += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
+  }
+
+  return out;
+}
+
 // Hermes doesn't reliably expose btoa/Buffer, so binary responses (axios
 // `responseType: "arraybuffer"`) are base64-encoded manually before being
 // written to disk via expo-file-system.

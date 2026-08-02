@@ -5,6 +5,8 @@ import { NavigationContainer } from "@react-navigation/native";
 import AuthStack from "./AuthStack";
 import MainStack from "./MainStack";
 import AdminDrawerNavigator from "./AdminDrawerNavigator";
+import ManagerDrawerNavigator from "./ManagerDrawerNavigator";
+import SupervisorDrawerNavigator from "./SupervisorDrawerNavigator";
 import SuperAdminDrawerNavigator from "./SuperAdminDrawerNavigator";
 import ErrorState from "../components/ErrorState";
 
@@ -59,7 +61,24 @@ export default function AppNavigator() {
 
     if (user.role === "superadmin") return <SuperAdminDrawerNavigator />;
     if (user.role === "admin") return <AdminDrawerNavigator />;
-    return <MainStack />;
+    if (user.role === "manager") return <ManagerDrawerNavigator />;
+    if (user.role === "supervisor") return <SupervisorDrawerNavigator />;
+    if (user.role === "employee") return <MainStack />;
+
+    // An unrecognised role must not fall through to the employee app: that is
+    // how an admin once ended up in the wrong UI. A role this build doesn't
+    // know about means the account is newer than the installed app, so say so
+    // and offer a way out rather than guessing.
+    return (
+      <SessionRecoveryScreen
+        message={
+          "This account uses a role this version of the app doesn't support yet. " +
+          "Update StaffTrack, or log in with a different account."
+        }
+        onRetry={retrySession}
+        onLogout={logout}
+      />
+    );
   };
 
   return <NavigationContainer>{renderApp()}</NavigationContainer>;

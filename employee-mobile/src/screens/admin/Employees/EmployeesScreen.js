@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -18,8 +18,17 @@ import EmployeeListItem from "./components/EmployeeListItem";
 import EmployeeFormModal from "./components/EmployeeFormModal";
 import ErrorState from "../../../components/ErrorState";
 import { getApiErrorMessage } from "../../../utils/apiError";
+import { AuthContext } from "../../../context/AuthContext";
+
+// Mirrors assignableRolesFor() in the API's config/roles.js. The server is
+// still the authority -- this only decides which buttons are worth showing.
+const ASSIGNABLE_ROLES = {
+  admin: ["admin", "manager", "supervisor", "employee"],
+  manager: ["supervisor", "employee"],
+};
 
 export default function EmployeesScreen({ navigation }) {
+  const { user } = useContext(AuthContext);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -74,6 +83,14 @@ export default function EmployeesScreen({ navigation }) {
           hourlyRate: form.hourlyRate === "" ? undefined : Number(form.hourlyRate),
           JoiningDate: form.JoiningDate,
         });
+
+        // The role travels on its own endpoint: the update above deliberately
+        // ignores a role field so a profile save can't smuggle in a promotion.
+        if (form.role && form.role !== editingEmployee.role) {
+          await api.patch(`/employees/${editingEmployee._id}/role`, {
+            role: form.role,
+          });
+        }
 
         // Optional password reset on edit (only when a new password was entered).
         if (form.password && form.password.trim()) {
@@ -162,6 +179,11 @@ export default function EmployeesScreen({ navigation }) {
     ]);
   };
 
+  // Nobody may change their own role, so the picker disappears when an admin
+  // opens their own record -- offering it would only produce a 403.
+  const isEditingSelf = editingEmployee && editingEmployee._id === user?._id;
+  const assignableRoles = isEditingSelf ? [] : ASSIGNABLE_ROLES[user?.role] || [];
+
   const filtered = employees.filter((e) =>
     [e.fullName, e.email, e.department, e.designation]
       .filter(Boolean)
@@ -219,6 +241,7 @@ export default function EmployeesScreen({ navigation }) {
       <EmployeeFormModal
         visible={modalVisible}
         employee={editingEmployee}
+        assignableRoles={assignableRoles}
         onClose={() => setModalVisible(false)}
         onSubmit={handleSubmit}
       />

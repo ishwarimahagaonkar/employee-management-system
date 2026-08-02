@@ -38,7 +38,25 @@ const passwordProblem = (password) => {
   return null;
 };
 
-export default function EmployeeFormModal({ visible, employee, onClose, onSubmit }) {
+const ROLE_LABELS = {
+  admin: "Admin",
+  manager: "Manager",
+  supervisor: "Supervisor",
+  employee: "Employee",
+};
+
+/**
+ * assignableRoles: the roles the signed-in user may grant, straight from the
+ * server's own rules. An empty list hides the picker entirely -- that's how
+ * editing your own account works, since nobody may change their own role.
+ */
+export default function EmployeeFormModal({
+  visible,
+  employee,
+  assignableRoles = [],
+  onClose,
+  onSubmit,
+}) {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -209,26 +227,37 @@ export default function EmployeeFormModal({ visible, employee, onClose, onSubmit
                   secureTextEntry
                 />
                 <Text style={styles.hint}>{PASSWORD_HINT}</Text>
+              </>
+            )}
 
+            {/* Shown when editing too, which is what makes a role editable at
+                all. The list comes from the server's rules, so a manager is
+                never offered Manager or Admin. */}
+            {assignableRoles.length > 0 && (
+              <>
                 <Text style={styles.label}>Role</Text>
                 <View style={styles.roleRow}>
-                  <TouchableOpacity
-                    style={[styles.roleBtn, form.role === "employee" && styles.roleBtnActive]}
-                    onPress={() => update("role")("employee")}
-                  >
-                    <Text style={[styles.roleBtnText, form.role === "employee" && styles.roleBtnTextActive]}>
-                      Employee
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.roleBtn, form.role === "admin" && styles.roleBtnActive]}
-                    onPress={() => update("role")("admin")}
-                  >
-                    <Text style={[styles.roleBtnText, form.role === "admin" && styles.roleBtnTextActive]}>
-                      Admin
-                    </Text>
-                  </TouchableOpacity>
+                  {assignableRoles.map((role) => (
+                    <TouchableOpacity
+                      key={role}
+                      style={[styles.roleBtn, form.role === role && styles.roleBtnActive]}
+                      onPress={() => update("role")(role)}
+                    >
+                      <Text
+                        style={[styles.roleBtnText, form.role === role && styles.roleBtnTextActive]}
+                      >
+                        {ROLE_LABELS[role] || role}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
+
+                {isEdit && form.role !== (employee?.role || "employee") && (
+                  <Text style={styles.hint}>
+                    {`Changing this to ${ROLE_LABELS[form.role] || form.role} takes effect straight away. ` +
+                      `They stay signed in and keep anything they're part-way through.`}
+                  </Text>
+                )}
               </>
             )}
 
@@ -367,12 +396,15 @@ const styles = StyleSheet.create({
 
   roleRow: {
     flexDirection: "row",
+    // Four roles don't fit across a phone, so they wrap two-up.
+    flexWrap: "wrap",
     marginBottom: 16,
     gap: 10,
   },
 
   roleBtn: {
-    flex: 1,
+    flexBasis: "47%",
+    flexGrow: 1,
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
