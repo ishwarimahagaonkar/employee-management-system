@@ -2,9 +2,10 @@ const Travel = require("../models/Travel");
 const User = require("../models/User");
 const { getPagination } = require("../utils/pagination");
 const { isValidCoord } = require("../utils/locationCheck");
+const { STAFF_ROLES } = require("../config/roles");
 
-// Validates a list of co-traveler ids: keeps only active, same-company
-// employees/admins, excluding the trip creator. Returns an array of ObjectIds.
+// Validates a list of co-traveler ids: keeps only active, same-company staff
+// (admins no longer travel), excluding the trip creator. Returns ObjectIds.
 async function resolveCoTravelers(rawIds, primaryUserId, companyId) {
     if (!Array.isArray(rawIds) || rawIds.length === 0) return [];
 
@@ -14,7 +15,7 @@ async function resolveCoTravelers(rawIds, primaryUserId, companyId) {
     const users = await User.find({
         _id: { $in: ids },
         companyId: companyId ?? null,
-        role: { $in: ["employee", "admin"] },
+        role: { $in: STAFF_ROLES },
         isActive: { $ne: false },
     }).select("_id");
 

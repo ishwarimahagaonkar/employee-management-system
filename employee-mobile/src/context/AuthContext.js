@@ -1,5 +1,5 @@
-import React, { createContext, useEffect, useState } from "react";
-import { Alert } from "react-native";
+import React, { createContext, useEffect, useRef, useState } from "react";
+import { Alert, AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { setUnauthorizedHandler } from "../api/api.js";
 import { getApiErrorMessage } from "../utils/apiError.js";
@@ -77,6 +77,45 @@ export const AuthProvider = ({ children }) => {
     checkLogin();
   };
 
+  // Re-reads the account from the server and updates the cached copy.
+  //
+  // This is how a role change reaches the app: an admin promoting someone to
+  // Manager changes what the server lets them do immediately, and this swaps
+  // them into the matching app without signing them out. Nothing local is
+  // cleared, so an in-progress trip or a half-filled form survives it.
+  //
+  // A failed refresh keeps the cached user on purpose -- a network blip must
+  // never look like a logout.
+  const refreshUser = async () => {
+    if (!tokenRef.current) return null;
+
+    try {
+      const res = await api.get("/employees/me");
+      await AsyncStorage.setItem("user", JSON.stringify(res.data));
+      setUser(res.data);
+      return res.data;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // Keep a ref alongside the state so the AppState listener below reads the
+  // current token without being torn down and rebuilt on every change.
+  const tokenRef = useRef(null);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  // Returning to the app is the natural moment to pick up a role change made
+  // while it was in the background.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshUser();
+    });
+
+    return () => sub.remove();
+  }, []);
+
   const login = async (newToken, newUser) => {
     await AsyncStorage.setItem("token", newToken);
     await AsyncStorage.setItem("user", JSON.stringify(newUser));
@@ -101,6 +140,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         sessionError,
         retrySession,
+        refreshUser,
         login,
         logout,
       }}

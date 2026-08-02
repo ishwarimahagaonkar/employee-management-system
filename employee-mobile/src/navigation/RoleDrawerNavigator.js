@@ -7,51 +7,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api/api.js";
 
-import AdminDashboard from "../screens/admin/AdminDashboard";
-import EmployeesScreen from "../screens/admin/Employees/EmployeesScreen";
-import AttendanceScreen from "../screens/admin/Attendance/AttendanceScreen";
-import TravelStackNavigator from "../screens/admin/Travel/TravelStackNavigator";
-import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
-import ReportScreen from "../screens/admin/Report/ReportScreen";
-import HolidaysScreen from "../screens/admin/Holidays/HolidaysScreen";
-import SettingsScreen from "../screens/admin/Settings/SettingsScreen";
-import SitesScreen from "../screens/sites/SitesScreen";
-import LabourScreen from "../screens/labour/LabourScreen";
-import DailyWorkReportScreen from "../screens/labour/DailyWorkReportScreen";
-import LabourReportScreen from "../screens/labour/LabourReportScreen";
-import { withErrorBoundary } from "../components/ErrorBoundary";
+// Drawer shell shared by the Manager and Supervisor apps.
+//
+// AdminDrawerNavigator is deliberately left alone: it works, it ships today,
+// and rewriting it to share this shell would put a working screen at risk for
+// no user-visible gain. This file exists so the two NEW roles don't each grow
+// their own copy.
+//
+// Both roles are staff first (they punch, travel and take leave), so their
+// first drawer item is the employee tab bar and the management screens sit
+// below it.
 
 const Drawer = createDrawerNavigator();
-
-// Guarded per screen so a crash in one shows an error there and leaves the
-// drawer -- and every other screen -- working.
-const DashboardRoute = withErrorBoundary(AdminDashboard, "Admin Dashboard");
-const EmployeesRoute = withErrorBoundary(EmployeesScreen, "Employees");
-const AttendanceRoute = withErrorBoundary(AttendanceScreen, "Attendance");
-const TravelRoute = withErrorBoundary(TravelStackNavigator, "Travel");
-const LeaveRoute = withErrorBoundary(LeaveScreen, "Leave");
-const HolidaysRoute = withErrorBoundary(HolidaysScreen, "Holidays");
-const ReportRoute = withErrorBoundary(ReportScreen, "Report");
-const SettingsRoute = withErrorBoundary(SettingsScreen, "Settings");
-const SitesRoute = withErrorBoundary(SitesScreen, "Sites");
-const LabourRoute = withErrorBoundary(LabourScreen, "Labour");
-const DailyWorkReportRoute = withErrorBoundary(DailyWorkReportScreen, "Daily Reports");
-const LabourReportsRoute = withErrorBoundary(LabourReportScreen, "Labour Reports");
-
-const ALL_NAV_ITEMS = [
-  { name: "Dashboard", label: "Dashboard", icon: "grid-outline" },
-  { name: "Employees", label: "Employees", icon: "people-outline" },
-  { name: "Attendance", label: "Attendance", icon: "time-outline" },
-  { name: "Sites", label: "Sites", icon: "business-outline" },
-  { name: "Labour", label: "Labour", icon: "people-circle-outline" },
-  { name: "DailyWorkReport", label: "Daily Reports", icon: "create-outline" },
-  { name: "LabourReports", label: "Labour Reports", icon: "clipboard-outline" },
-  { name: "Travel", label: "Travel", icon: "location-outline", premiumOnly: true },
-  { name: "Leave", label: "Leave", icon: "calendar-outline" },
-  { name: "Holidays", label: "Holidays", icon: "sunny-outline" },
-  { name: "Report", label: "Report", icon: "document-text-outline", premiumOnly: true },
-  { name: "Settings", label: "Settings", icon: "settings-outline" },
-];
 
 function initials(name) {
   return (name || "")
@@ -62,15 +29,15 @@ function initials(name) {
     .join("");
 }
 
-function CustomDrawerContent(props) {
+function RoleDrawerContent({ roleLabel, navItems, ...props }) {
   const { user, logout } = useContext(AuthContext);
-  const isPremium = user?.company?.plan !== "Standard";
-  const navItems = ALL_NAV_ITEMS.filter((item) => !item.premiumOnly || isPremium);
 
   const handleLogout = async () => {
     try {
       await api.post("/auth/logout");
     } catch (error) {
+      // A failed logout call must never trap someone in the app -- the local
+      // session is cleared either way.
     } finally {
       await logout();
     }
@@ -92,7 +59,7 @@ function CustomDrawerContent(props) {
           <Text style={styles.avatarText}>{initials(user?.fullName)}</Text>
         </View>
         <Text style={styles.name}>{user?.fullName}</Text>
-        <Text style={styles.role}>Administrator</Text>
+        <Text style={styles.role}>{roleLabel}</Text>
       </View>
 
       <DrawerContentScrollView {...props} contentContainerStyle={styles.itemsList}>
@@ -126,27 +93,38 @@ function CustomDrawerContent(props) {
   );
 }
 
-export default function AdminDrawerNavigator() {
+/**
+ * Builds a drawer navigator from a role's menu definition.
+ *
+ * items: [{ name, label, icon, component, premiumOnly?, initialParams? }]
+ * Premium-only items disappear for Standard-plan companies, matching how the
+ * admin drawer already hides Travel and Report.
+ *
+ * `component` must already be wrapped (withErrorBoundary) at module level by
+ * the caller. Wrapping here would build a new component type on every render
+ * and remount the screen each time the drawer re-renders.
+ */
+export default function RoleDrawerNavigator({ roleLabel, items }) {
   const { user } = useContext(AuthContext);
   const isPremium = user?.company?.plan !== "Standard";
+
+  const navItems = items.filter((item) => !item.premiumOnly || isPremium);
 
   return (
     <Drawer.Navigator
       screenOptions={{ headerShown: false, drawerType: "front" }}
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
+      drawerContent={(props) => (
+        <RoleDrawerContent roleLabel={roleLabel} navItems={navItems} {...props} />
+      )}
     >
-      <Drawer.Screen name="Dashboard" component={DashboardRoute} />
-      <Drawer.Screen name="Employees" component={EmployeesRoute} />
-      <Drawer.Screen name="Attendance" component={AttendanceRoute} />
-      <Drawer.Screen name="Sites" component={SitesRoute} />
-      <Drawer.Screen name="Labour" component={LabourRoute} />
-      <Drawer.Screen name="DailyWorkReport" component={DailyWorkReportRoute} />
-      <Drawer.Screen name="LabourReports" component={LabourReportsRoute} />
-      {isPremium && <Drawer.Screen name="Travel" component={TravelRoute} />}
-      <Drawer.Screen name="Leave" component={LeaveRoute} />
-      <Drawer.Screen name="Holidays" component={HolidaysRoute} />
-      {isPremium && <Drawer.Screen name="Report" component={ReportRoute} />}
-      <Drawer.Screen name="Settings" component={SettingsRoute} />
+      {navItems.map((item) => (
+        <Drawer.Screen
+          key={item.name}
+          name={item.name}
+          component={item.component}
+          initialParams={item.initialParams}
+        />
+      ))}
     </Drawer.Navigator>
   );
 }

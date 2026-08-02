@@ -6,6 +6,7 @@ const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const Travel = require("../models/Travel");
 const Holiday = require("../models/Holiday");
+const { isStaffRole } = require("../config/roles");
 
 const NOT_AVAILABLE = "Not available";
 
@@ -50,9 +51,12 @@ async function buildEmployeeReport({ userId, startDate, endDate, adminName, comp
         throw err;
     }
 
-    const employee = await User.findById(userId).select("empID fullName department designation companyId");
+    // `role` has to be selected for the staff check below to see anything --
+    // without it employee.role was always undefined, so the intended
+    // "no reports for admins" rule silently never fired.
+    const employee = await User.findById(userId).select("empID fullName department designation companyId role");
 
-    if (!employee || employee.role === "admin" || String(employee.companyId ?? null) !== String(companyId ?? null)) {
+    if (!employee || !isStaffRole(employee.role) || String(employee.companyId ?? null) !== String(companyId ?? null)) {
         const err = new Error("Employee not found");
         err.status = 404;
         throw err;

@@ -10,9 +10,19 @@ const initials = (name) =>
     .map((part) => part[0].toUpperCase())
     .join("");
 
+// The list now covers every role a caller can manage, not just employees, so
+// each row has to say which one it is. Plain "Employee" stays unlabelled --
+// it's the default and badging every row would just add noise.
+const ROLE_BADGES = {
+  admin: { label: "Admin", background: "#EEECFF", color: "#112250" },
+  manager: { label: "Manager", background: "#DCFCE7", color: "#15803D" },
+  supervisor: { label: "Supervisor", background: "#DBEAFE", color: "#1D4ED8" },
+};
+
 export default function EmployeeListItem({ employee, onEdit, onDelete, onToggleActive, busy }) {
   // Only an explicit false means deactivated; older records have no flag.
   const isInactive = employee.isActive === false;
+  const roleBadge = ROLE_BADGES[employee.role];
 
   return (
     <View style={[styles.card, isInactive && styles.cardInactive]}>
@@ -23,6 +33,11 @@ export default function EmployeeListItem({ employee, onEdit, onDelete, onToggleA
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, isInactive && styles.nameInactive]}>{employee.fullName}</Text>
+          {!!roleBadge && (
+            <View style={[styles.badge, { backgroundColor: roleBadge.background }]}>
+              <Text style={[styles.badgeText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
+            </View>
+          )}
           {isInactive && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Inactive</Text>

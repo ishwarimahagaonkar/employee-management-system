@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ALL_ROLES } = require("../config/roles");
 
 const userSchema = new mongoose.Schema(
     {
@@ -24,15 +25,28 @@ const userSchema = new mongoose.Schema(
             required: true,
         },
 
+        // "manager" and "supervisor" were added alongside the existing values,
+        // so every account created before this change keeps working untouched.
+        // See config/roles.js for what each one may do.
         role: {
             type: String,
-            enum: ["superadmin", "admin", "employee"],
+            enum: ALL_ROLES,
             default: "employee",
         },
 
         companyId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Company",
+            default: null,
+        },
+
+        // Reporting line, used by "Assign Managers" / "Assign Supervisors".
+        // Null on every existing account and on anyone who reports to nobody;
+        // read access is company-wide, so this records the relationship rather
+        // than restricting what its holder can see.
+        managerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
             default: null,
         },
 
