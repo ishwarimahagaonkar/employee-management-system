@@ -106,13 +106,22 @@ export default function TravelScreen() {
         )}
       </View>
 
+      {/* Only mounted when there is actually a trip to log against.
+          pendingMeetingTrip can become null while the sheet is open -- a
+          background refresh lands, or the day rolls over -- and reading
+          ._id off null threw straight through the press handler into the
+          error boundary, which users reported as the app crashing. */}
       <MeetingDetailsModal
-        visible={meetingModalVisible}
+        visible={meetingModalVisible && !!pendingMeetingTrip}
         loading={btnLoading}
         onClose={() => setMeetingModalVisible(false)}
-        onSubmit={(details) =>
-          logMeeting(pendingMeetingTrip._id, details, () => setMeetingModalVisible(false))
-        }
+        onSubmit={(details) => {
+          if (!pendingMeetingTrip) {
+            setMeetingModalVisible(false);
+            return;
+          }
+          logMeeting(pendingMeetingTrip._id, details, () => setMeetingModalVisible(false));
+        }}
       />
 
       <TripDetailModal

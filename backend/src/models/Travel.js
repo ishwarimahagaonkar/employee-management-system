@@ -42,12 +42,17 @@ const travelSchema = new mongoose.Schema({
             },
 
             // How distanceKm was computed:
-            //   gps      — summed from the recorded background GPS route (most accurate)
-            //   road     — routed road distance between start and end (OSRM)
-            //   straight — straight-line fallback
+            //   gps        — summed from the recorded background GPS route (most accurate)
+            //   road       — routed road distance between start and end (OSRM)
+            //   straight   — straight-line fallback
+            //   unrecorded — the trip was never ended, so there is no end
+            //                location and no distance can be derived. Closed by
+            //                scripts/repairStuckTrips.js. distanceKm is 0 and
+            //                must NOT be treated as "travelled nothing" for
+            //                reimbursement -- it means "unknown".
             distanceSource: {
                 type: String,
-                enum: ["gps", "road", "straight"],
+                enum: ["gps", "road", "straight", "unrecorded"],
                 default: "straight"
             },
 

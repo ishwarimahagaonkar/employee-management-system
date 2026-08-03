@@ -86,11 +86,33 @@ async function getRoadDistanceKm(lat1, lon1, lat2, lon2) {
 function computePathKm(route, startAnchor, endAnchor) {
     if (!Array.isArray(route)) return null;
 
+    // Points must fall inside the trip's own time window.
+    //
+    // Without this, a route left over from an EARLIER trip was summed against
+    // this trip's start/end anchors. The teleport guard below could not catch
+    // it, because that guard is speed-based: a point ten hours stale makes even
+    // a 50 km jump look like 5 km/h, so the bogus distance was added and --
+    // being larger than the straight line -- always won the source comparison.
+    // The result was a trip reported at many times its real distance.
+    //
+    // A minute of slack each side covers clock skew between device and server.
+    const SLACK_MS = 60000;
+    const windowStart = startAnchor?.t ? startAnchor.t - SLACK_MS : null;
+    const windowEnd = endAnchor?.t ? endAnchor.t + SLACK_MS : null;
+
     const points = route
         .filter((p) => p && isValidCoord(p.lat) && isValidCoord(p.lng))
         .map((p) => ({ lat: p.lat, lng: p.lng, t: Number(p.t) || null }))
+        .filter((p) => {
+            if (windowStart === null || windowEnd === null) return true;
+            // An untimestamped point can't be shown to belong to this trip.
+            if (!p.t) return false;
+            return p.t >= windowStart && p.t <= windowEnd;
+        })
         .slice(0, 3000);
 
+    // Fewer than two usable points means the recording is unusable; the caller
+    // falls back to the routed start->end distance, which is never inflated.
     if (points.length < 2) return null;
 
     // Anchor with the trip's start/end fixes so a late GPS lock at the
@@ -147,6 +169,30 @@ function getTodayDate() {
     return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
+/**
+ * Finds the user's currently-open trip, wherever it lives.
+ *
+ * A trip is stored under the date it STARTED. Looking it up by today's date --
+ * as this used to -- meant a trip begun at 23:30 and ended at 00:15 searched
+ * the wrong document, answered "No active trip found", and stayed open
+ * forever. That also stopped the client clearing its recorded GPS route, which
+ * then leaked into the next trip's distance.
+ *
+ * Returns { travel, trip } or null.
+ */
+async function findOpenTrip(userId) {
+    // `endTime: null` also matches documents where the field was never set.
+    const travel = await Travel.findOne({ userId, "trips.endTime": null })
+        .sort({ date: -1 });
+
+    if (!travel) return null;
+
+    const trip = travel.trips[travel.trips.length - 1];
+    if (!trip || trip.endTime) return null;
+
+    return { travel, trip };
+}
+
 /* =========================
    START TRIP (TOKEN BASED)
 ========================= */
@@ -165,6 +211,17 @@ exports.startTrip = async (req, res) => {
 
         const validCoTravelers = await resolveCoTravelers(coTravelers, userId, req.user.companyId);
 
+        // Checked across dates, not just today: a trip started before midnight
+        // is still in progress after it, and starting a second one would leave
+        // two open trips that no lookup could tell apart.
+        const alreadyOpen = await findOpenTrip(userId);
+        if (alreadyOpen) {
+            return res.status(400).json({
+                success: false,
+                message: "Trip already in progress"
+            });
+        }
+
         const date = getTodayDate();
 
         let travel = await Travel.findOne({ userId, date });
@@ -178,19 +235,27 @@ exports.startTrip = async (req, res) => {
             });
         }
 
-        // prevent multiple active trips
         const lastTrip = travel.trips[travel.trips.length - 1];
-        if (lastTrip && !lastTrip.endTime) {
-            return res.status(400).json({
-                success: false,
-                message: "Trip already in progress"
-            });
-        }
 
-        // Today's last trip must have its meeting logged before a new one
-        // can start. Safe to check against "today" here because getTodayDate()
-        // is Asia/Kolkata-based, so this trip can never belong to a previous day.
-        if (lastTrip && lastTrip.endTime && !lastTrip.meetingDetails?.customerName) {
+        // The previous trip must have its meeting logged before a new one can
+        // start. Checked against yesterday too, because a trip that ran past
+        // midnight ended in yesterday's document -- scoping this to today let
+        // such a trip escape the requirement entirely.
+        const previousDoc = lastTrip
+            ? travel
+            : await Travel.findOne({ userId, date: { $lt: date } }).sort({ date: -1 });
+
+        const previousTrip = previousDoc?.trips?.[previousDoc.trips.length - 1];
+
+        // A trip closed by the repair script has no end location and no real
+        // duration, so demanding meeting notes for it would block the user on
+        // a journey nobody can now describe.
+        if (
+            previousTrip &&
+            previousTrip.endTime &&
+            previousTrip.distanceSource !== "unrecorded" &&
+            !previousTrip.meetingDetails?.customerName
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Add meeting details for your last trip before starting a new one",
@@ -238,26 +303,18 @@ exports.endTrip = async (req, res) => {
             return res.status(400).json({ success: false, message: "Valid end location is required" });
         }
 
-        const date = getTodayDate();
+        // Looked up by open-trip rather than by today's date, so a trip that
+        // ran past midnight can still be ended (see findOpenTrip).
+        const open = await findOpenTrip(userId);
 
-        const travel = await Travel.findOne({ userId, date });
-
-        if (!travel || travel.trips.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "No active trip found"
-            });
-        }
-
-        const lastTrip = travel.trips[travel.trips.length - 1];
-
-        if (lastTrip.endTime) {
+        if (!open) {
             return res.status(400).json({
                 success: false,
                 message: "No active trip to end"
             });
         }
 
+        const { travel, trip: lastTrip } = open;
         const endTime = new Date();
 
         const straightKm = calculateDistance(
@@ -400,9 +457,41 @@ exports.getTodayTravel = async (req, res) => {
         const userId = req.user._id;
         const date = getTodayDate();
 
-        const travel = await Travel.findOne({ userId, date })
+        // Two days, newest first: a trip that ran past midnight ended in
+        // YESTERDAY's document, and its meeting still has to be collected.
+        // Deriving that from today's trips alone (as the app used to) left
+        // such a trip permanently un-loggable -- and startTrip blocks on it.
+        const recent = await Travel.find({ userId })
+            .sort({ date: -1 })
+            .limit(2)
             .select("-trips.route")
             .populate("trips.coTravelers", "fullName");
+
+        const travel = recent.find((d) => d.date === date) || null;
+
+        // Newest ended trip anywhere in that window still missing its meeting.
+        let pendingMeeting = null;
+        for (const doc of recent) {
+            const trip = doc.trips?.[doc.trips.length - 1];
+            if (
+                trip &&
+                trip.endTime &&
+                // Repair-closed trips are skipped: there is nothing to report a
+                // meeting against, and prompting for one would be a dead end.
+                trip.distanceSource !== "unrecorded" &&
+                !trip.meetingDetails?.customerName
+            ) {
+                pendingMeeting = { ...trip.toObject(), date: doc.date };
+                break;
+            }
+        }
+
+        // Surfaced so the app can offer "end trip" on a trip started
+        // yesterday rather than showing an idle screen.
+        const open = await findOpenTrip(userId);
+        const activeTrip = open
+            ? { _id: open.trip._id, startTime: open.trip.startTime, purpose: open.trip.purpose, date: open.travel.date }
+            : null;
 
         if (!travel) {
             return res.json({
@@ -410,14 +499,16 @@ exports.getTodayTravel = async (req, res) => {
                 data: {
                     totalTrips: 0,
                     totalDistanceKm: 0,
-                    trips: []
-                }
+                    trips: [],
+                    pendingMeeting,
+                    activeTrip,
+                },
             });
         }
 
         res.json({
             success: true,
-            data: travel
+            data: { ...travel.toObject(), pendingMeeting, activeTrip },
         });
 
     } catch (error) {
@@ -454,10 +545,15 @@ exports.getTravelHistory = async (req, res) => {
         // Surfaced read-only with full trip data (including the trip's km),
         // but the day's totalDistanceKm stays 0 so nothing is added to the
         // co-traveler's own km totals / reimbursement.
+        //
+        // Bounded even when the caller didn't ask for a page: this query has no
+        // date filter, so left open it returns every trip the user was ever a
+        // co-traveler on and grows for the life of the account.
         const coDocs = await Travel.find({ "trips.coTravelers": userId })
             .select("-trips.route")
             .populate("userId", "fullName")
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .limit(paginate ? limit : 50);
 
         const coEntries = [];
         coDocs.forEach((doc) => {

@@ -13,6 +13,8 @@ import SitesScreen from "../screens/sites/SitesScreen";
 import LabourScreen from "../screens/labour/LabourScreen";
 import DailyWorkReportScreen from "../screens/labour/DailyWorkReportScreen";
 import LabourReportScreen from "../screens/labour/LabourReportScreen";
+import PlaceholderScreen from "../screens/admin/components/PlaceholderScreen";
+import { FEATURES } from "../config/features";
 
 // A manager is an employee plus management rights, so "My Work" is the same
 // tab bar an employee gets -- punch in/out, travel, leave, profile -- and the
@@ -35,6 +37,13 @@ const SitesRoute = withErrorBoundary(SitesScreen, "Sites");
 const LabourRoute = withErrorBoundary(LabourScreen, "Labour");
 const DailyWorkReportRoute = withErrorBoundary(DailyWorkReportScreen, "Daily Reports");
 const LabourReportsRoute = withErrorBoundary(LabourReportScreen, "Labour Reports");
+const ComingSoonRoute = withErrorBoundary(PlaceholderScreen, "Coming Soon");
+
+// Real screen when the feature is on, "Coming Soon" when it isn't.
+const gated = (component, title, icon) =>
+  FEATURES.labourManagement
+    ? { component }
+    : { component: ComingSoonRoute, initialParams: { title, icon } };
 
 const ITEMS = [
   { name: "Dashboard", label: "Dashboard", icon: "grid-outline", component: DashboardRoute },
@@ -42,19 +51,29 @@ const ITEMS = [
   { name: "Employees", label: "Employees", icon: "people-outline", component: EmployeesRoute },
   { name: "Attendance", label: "Attendance", icon: "time-outline", component: AttendanceRoute },
   { name: "Leave", label: "Leave", icon: "calendar-outline", component: LeaveRoute },
-  { name: "Sites", label: "Sites", icon: "business-outline", component: SitesRoute },
-  { name: "Labour", label: "Labour", icon: "people-circle-outline", component: LabourRoute },
+  {
+    name: "Sites",
+    label: "Sites",
+    icon: "business-outline",
+    ...gated(SitesRoute, "Sites", "business-outline"),
+  },
+  {
+    name: "Labour",
+    label: "Labour",
+    icon: "people-circle-outline",
+    ...gated(LabourRoute, "Labour", "people-circle-outline"),
+  },
   {
     name: "DailyWorkReport",
     label: "Daily Reports",
     icon: "create-outline",
-    component: DailyWorkReportRoute,
+    ...gated(DailyWorkReportRoute, "Daily Reports", "create-outline"),
   },
   {
     name: "LabourReports",
     label: "Labour Reports",
     icon: "clipboard-outline",
-    component: LabourReportsRoute,
+    ...gated(LabourReportsRoute, "Labour Reports", "clipboard-outline"),
   },
   {
     name: "Report",

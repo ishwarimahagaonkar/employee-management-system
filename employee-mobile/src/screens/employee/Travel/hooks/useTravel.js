@@ -14,6 +14,67 @@ import {
 // Most recent trips shown in the history list.
 const HISTORY_LIMIT = 5;
 
+// How many days of travel to pull for that list. Without this the endpoint
+// returns EVERY day the user has ever travelled (getPagination treats missing
+// params as "no pagination"), so the payload grew with every working day.
+const HISTORY_PAGE_SIZE = 20;
+
+// How long to wait for a usable GPS fix before giving up.
+const FIX_TIMEOUT_MS = 15000;
+
+/**
+ * One location fix, with a timeout that actually cancels.
+ *
+ * This used to be Promise.race([getCurrentPositionAsync(), timeout]). Racing
+ * does not cancel the loser: getCurrentPositionAsync takes no abort signal
+ * (checked against expo-location in SDK 56), so every timed-out attempt left a
+ * live high-accuracy GPS listener running for the lifetime of the process.
+ * A day of poor-signal retries accumulated enough of them to stall the app.
+ *
+ * watchPositionAsync returns a subscription we can remove(), so the native
+ * listener is released on every path -- success, timeout and error.
+ */
+async function getPositionOnce() {
+  let subscription = null;
+  let timer = null;
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const finish = (fn, arg) => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        subscription?.remove();
+        subscription = null;
+        fn(arg);
+      };
+
+      timer = setTimeout(
+        () => finish(reject, new Error(
+          "Could not get your location. Please check your GPS/network signal and try again."
+        )),
+        FIX_TIMEOUT_MS
+      );
+
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 0 },
+        (position) => finish(resolve, position),
+        (error) => finish(reject, error instanceof Error ? error : new Error(String(error)))
+      )
+        .then((sub) => {
+          // The fix can arrive before this resolves; if finish() already ran,
+          // tear the subscription down immediately rather than leaking it.
+          if (timer === null) sub.remove();
+          else subscription = sub;
+        })
+        .catch((err) => finish(reject, err));
+    });
+  } finally {
+    // Belt and braces: nothing below this line may leave a listener behind.
+    if (timer) clearTimeout(timer);
+    subscription?.remove();
+  }
+}
+
 export default function useTravel() {
   const [todayTravel, setTodayTravel] = useState(null);
   const [history, setHistory] = useState([]);
@@ -39,10 +100,17 @@ export default function useTravel() {
 
       setTodayTravel(data);
 
+      // The server reports the open trip across dates, because a trip started
+      // before midnight is still running after it and lives in the previous
+      // day's document. Falling back to today's last trip keeps this working
+      // against an older backend.
       const trips = data?.trips || [];
       const lastTrip = trips[trips.length - 1];
 
-      const isActive = Boolean(lastTrip && !lastTrip.endTime);
+      const isActive = data?.activeTrip
+        ? true
+        : Boolean(lastTrip && !lastTrip.endTime);
+
       setActiveTrip(isActive);
 
       // If GPS recording is still running but no trip is active (trip ended
@@ -61,6 +129,10 @@ export default function useTravel() {
 
       const res = await api.get("/travel/history", {
         headers: { Authorization: `Bearer ${token}` },
+        // Bounded on purpose: the endpoint returns the user's ENTIRE travel
+        // history when no page/limit is supplied, and only five rows are ever
+        // rendered from it.
+        params: { page: 1, limit: HISTORY_PAGE_SIZE },
       });
 
       const days = res.data?.data || [];
@@ -107,12 +179,7 @@ export default function useTravel() {
       );
     }
 
-    const location = await Promise.race([
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Could not get your location. Please check your GPS/network signal and try again.")), 15000)
-      ),
-    ]);
+    const location = await getPositionOnce();
 
     // Reject readings too imprecise to trust for a distance calculation --
     // a coarse network/WiFi-based fix can be off by several kilometers.
@@ -245,13 +312,17 @@ export default function useTravel() {
       ? todayTravel.trips[todayTravel.trips.length - 1]
       : null;
 
-  // Today's most recently ended trip, if it still needs its meeting logged.
-  // Scoped entirely to todayTravel (today's IST date, per the backend), so
-  // this can never point at a trip from a previous day.
+  // The most recently ended trip still needing its meeting logged.
+  //
+  // Taken from the server, which looks across dates: a trip that ran past
+  // midnight ENDS in the previous day's document, and deriving this from
+  // today's trips alone left it permanently un-loggable -- while startTrip
+  // refused to begin a new trip until it was filled in.
   const pendingMeetingTrip =
-    currentTrip && currentTrip.endTime && !currentTrip.meetingDetails?.customerName
+    todayTravel?.pendingMeeting ||
+    (currentTrip && currentTrip.endTime && !currentTrip.meetingDetails?.customerName
       ? currentTrip
-      : null;
+      : null);
 
   return {
     todayTravel,
