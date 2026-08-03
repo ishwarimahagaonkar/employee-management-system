@@ -19,7 +19,9 @@ import SitesScreen from "../screens/sites/SitesScreen";
 import LabourScreen from "../screens/labour/LabourScreen";
 import DailyWorkReportScreen from "../screens/labour/DailyWorkReportScreen";
 import LabourReportScreen from "../screens/labour/LabourReportScreen";
+import PlaceholderScreen from "./../screens/admin/components/PlaceholderScreen";
 import { withErrorBoundary } from "../components/ErrorBoundary";
+import { FEATURES } from "../config/features";
 
 const Drawer = createDrawerNavigator();
 
@@ -37,6 +39,11 @@ const SitesRoute = withErrorBoundary(SitesScreen, "Sites");
 const LabourRoute = withErrorBoundary(LabourScreen, "Labour");
 const DailyWorkReportRoute = withErrorBoundary(DailyWorkReportScreen, "Daily Reports");
 const LabourReportsRoute = withErrorBoundary(LabourReportScreen, "Labour Reports");
+const ComingSoonRoute = withErrorBoundary(PlaceholderScreen, "Coming Soon");
+
+// The labour/site screens are built and imported above; FEATURES decides
+// whether the drawer resolves to them or to "Coming Soon".
+const labourOn = FEATURES.labourManagement;
 
 const ALL_NAV_ITEMS = [
   { name: "Dashboard", label: "Dashboard", icon: "grid-outline" },
@@ -138,10 +145,26 @@ export default function AdminDrawerNavigator() {
       <Drawer.Screen name="Dashboard" component={DashboardRoute} />
       <Drawer.Screen name="Employees" component={EmployeesRoute} />
       <Drawer.Screen name="Attendance" component={AttendanceRoute} />
-      <Drawer.Screen name="Sites" component={SitesRoute} />
-      <Drawer.Screen name="Labour" component={LabourRoute} />
-      <Drawer.Screen name="DailyWorkReport" component={DailyWorkReportRoute} />
-      <Drawer.Screen name="LabourReports" component={LabourReportsRoute} />
+      <Drawer.Screen
+        name="Sites"
+        component={labourOn ? SitesRoute : ComingSoonRoute}
+        initialParams={labourOn ? undefined : { title: "Sites", icon: "business-outline" }}
+      />
+      <Drawer.Screen
+        name="Labour"
+        component={labourOn ? LabourRoute : ComingSoonRoute}
+        initialParams={labourOn ? undefined : { title: "Labour", icon: "people-circle-outline" }}
+      />
+      <Drawer.Screen
+        name="DailyWorkReport"
+        component={labourOn ? DailyWorkReportRoute : ComingSoonRoute}
+        initialParams={labourOn ? undefined : { title: "Daily Reports", icon: "create-outline" }}
+      />
+      <Drawer.Screen
+        name="LabourReports"
+        component={labourOn ? LabourReportsRoute : ComingSoonRoute}
+        initialParams={labourOn ? undefined : { title: "Labour Reports", icon: "clipboard-outline" }}
+      />
       {isPremium && <Drawer.Screen name="Travel" component={TravelRoute} />}
       <Drawer.Screen name="Leave" component={LeaveRoute} />
       <Drawer.Screen name="Holidays" component={HolidaysRoute} />
