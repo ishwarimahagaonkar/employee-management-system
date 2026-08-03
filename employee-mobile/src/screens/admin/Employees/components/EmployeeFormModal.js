@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+import DateField from "../../Holidays/components/DateField";
 
 const emptyForm = {
   empID: "",
@@ -46,6 +48,51 @@ const ROLE_LABELS = {
 };
 
 /**
+ * Password input with a reveal toggle.
+ *
+ * The input keeps the app's normal field styling; the eye sits inside the
+ * border rather than beside it, so the field still lines up with every other
+ * one in the form.
+ *
+ * autoComplete/textContentType are off: this form sets SOMEONE ELSE'S
+ * password, and without that both platforms offer to save it into the admin's
+ * own password manager.
+ */
+function PasswordField({ value, onChangeText, placeholder, visible, onToggle }) {
+  return (
+    <View style={styles.passwordWrap}>
+      <TextInput
+        style={styles.passwordInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#9CA3AF"
+        secureTextEntry={!visible}
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        textContentType="none"
+      />
+
+      <TouchableOpacity
+        style={styles.eyeBtn}
+        onPress={onToggle}
+        // Generous target: the icon itself is smaller than a fingertip.
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel={visible ? "Hide password" : "Show password"}
+      >
+        <Ionicons
+          name={visible ? "eye-off-outline" : "eye-outline"}
+          size={20}
+          color="#6B7280"
+        />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/**
  * assignableRoles: the roles the signed-in user may grant, straight from the
  * server's own rules. An empty list hides the picker entirely -- that's how
  * editing your own account works, since nobody may change their own role.
@@ -60,7 +107,23 @@ export default function EmployeeFormModal({
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const isEdit = !!employee;
+
+  // The error now sits at the bottom of the form, so on a long form it can be
+  // off screen when it appears. These scroll it into view.
+  const scrollRef = useRef(null);
+  const errorOffset = useRef(0);
+
+  const revealError = () => {
+    // A frame's delay lets the banner lay out before we scroll to where it is.
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(errorOffset.current - 40, 0),
+        animated: true,
+      });
+    });
+  };
 
   useEffect(() => {
     if (employee) {
@@ -82,6 +145,8 @@ export default function EmployeeFormModal({
 
     setFormError(null);
     setSubmitting(false);
+    // Never leave a password revealed from a previous employee's form.
+    setShowPassword(false);
   }, [employee, visible]);
 
   const update = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -115,12 +180,26 @@ export default function EmployeeFormModal({
       if (weak) return weak;
     }
 
-    if (form.hourlyRate && (isNaN(Number(form.hourlyRate)) || Number(form.hourlyRate) < 0)) {
-      return "Hourly rate must be a number that isn't negative.";
+    // Hourly rate feeds payroll and the salary slip PDF (see the hint under
+    // the field), so a bad value here becomes a wrong payment later.
+    if (form.hourlyRate) {
+      const rate = Number(form.hourlyRate);
+
+      if (isNaN(rate) || rate < 0) {
+        return "Hourly rate must be a number that isn't negative.";
+      }
+      // Catches a decimal point typed in the wrong place before it reaches
+      // payroll. Deliberately generous rather than a policy limit.
+      if (rate > 100000) {
+        return "Hourly rate looks too high. Enter the rate per hour, not per month.";
+      }
     }
 
+    // The date comes from a calendar picker, so it is always a real date in
+    // YYYY-MM-DD. No range limit: back-dating an existing employee and
+    // recording a future start are both legitimate.
     if (form.JoiningDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.JoiningDate.trim())) {
-      return "Joining date must look like 2026-07-31.";
+      return "Pick a joining date from the calendar.";
     }
 
     return null;
@@ -135,6 +214,7 @@ export default function EmployeeFormModal({
     const problem = validate();
     if (problem) {
       setFormError(problem);
+      revealError();
       return;
     }
 
@@ -143,7 +223,10 @@ export default function EmployeeFormModal({
 
     try {
       const failure = await onSubmit(form);
-      if (failure) setFormError(failure);
+      if (failure) {
+        setFormError(failure);
+        revealError();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -163,14 +246,11 @@ export default function EmployeeFormModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {!!formError && (
-              <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                <Text style={styles.errorText}>{formError}</Text>
-              </View>
-            )}
-
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.label}>Employee ID</Text>
             <TextInput
               style={styles.input}
@@ -203,13 +283,12 @@ export default function EmployeeFormModal({
             {isEdit && (
               <>
                 <Text style={styles.label}>Reset Password</Text>
-                <TextInput
-                  style={styles.input}
+                <PasswordField
                   value={form.password}
                   onChangeText={update("password")}
                   placeholder="Leave blank to keep current"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
                 />
                 {!!form.password && <Text style={styles.hint}>{PASSWORD_HINT}</Text>}
               </>
@@ -218,13 +297,12 @@ export default function EmployeeFormModal({
             {!isEdit && (
               <>
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
+                <PasswordField
                   value={form.password}
                   onChangeText={update("password")}
                   placeholder="Temporary password"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
                 />
                 <Text style={styles.hint}>{PASSWORD_HINT}</Text>
               </>
@@ -288,15 +366,37 @@ export default function EmployeeFormModal({
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
+            {/* Says plainly what the number does. It is multiplied by the
+                hours this person actually worked, so leaving it at 0 means
+                their payroll and salary slip both come out as zero. */}
+            <Text style={styles.hint}>
+              Pay per hour worked. Used for payroll and the salary slip; leave
+              blank only if this person isn't paid hourly.
+            </Text>
 
-            <Text style={styles.label}>Joining Date</Text>
-            <TextInput
-              style={styles.input}
+            {/* A calendar rather than a typed string: it cannot produce an
+                invalid date, and it accepts any date -- past hires and future
+                start dates are both normal. Same picker the Holidays and
+                Leave screens use. */}
+            <DateField
+              label="Joining Date"
               value={form.JoiningDate}
-              onChangeText={update("JoiningDate")}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
+              onChange={update("JoiningDate")}
             />
+
+            {/* Errors live at the FOOT of the form, next to the button that
+                triggers them, and are scrolled into view when they appear.
+                At the top they were off screen by the time anyone had filled
+                the form in, so a failed save looked like nothing happened. */}
+            {!!formError && (
+              <View
+                style={styles.errorBanner}
+                onLayout={(e) => { errorOffset.current = e.nativeEvent.layout.y; }}
+              >
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{formError}</Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && styles.submitBtnBusy]}
@@ -360,6 +460,31 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: -10,
     marginBottom: 16,
+  },
+
+  // Mirrors `input` so the password field is indistinguishable from its
+  // neighbours, with the eye sitting inside the border.
+  passwordWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    paddingRight: 12,
+    marginBottom: 16,
+  },
+
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#1E1B4B",
+  },
+
+  eyeBtn: {
+    paddingLeft: 4,
   },
 
   errorBanner: {

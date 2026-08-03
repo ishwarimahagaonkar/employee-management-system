@@ -19,24 +19,53 @@ const HISTORY_LIMIT = 5;
 // params as "no pagination"), so the payload grew with every working day.
 const HISTORY_PAGE_SIZE = 20;
 
-// How long to wait for a usable GPS fix before giving up.
-const FIX_TIMEOUT_MS = 15000;
+// How long to wait for a usable GPS fix before giving up. A cold GPS start
+// routinely needs 20-40s, so this is deliberately generous -- the alternative
+// is telling someone standing at their destination that they cannot end their
+// trip.
+const FIX_TIMEOUT_MS = 30000;
+
+// Stop waiting as soon as a fix is at least this precise (meters). Anything
+// better than this is indistinguishable for a trip-distance calculation.
+const GOOD_ACCURACY_M = 50;
 
 /**
- * One location fix, with a timeout that actually cancels.
+ * Waits for a usable GPS fix, with a timeout that actually cancels.
  *
- * This used to be Promise.race([getCurrentPositionAsync(), timeout]). Racing
- * does not cancel the loser: getCurrentPositionAsync takes no abort signal
- * (checked against expo-location in SDK 56), so every timed-out attempt left a
- * live high-accuracy GPS listener running for the lifetime of the process.
- * A day of poor-signal retries accumulated enough of them to stall the app.
+ * Two things this has to get right:
  *
- * watchPositionAsync returns a subscription we can remove(), so the native
- * listener is released on every path -- success, timeout and error.
+ * 1. CANCELLATION. This used to be Promise.race([getCurrentPositionAsync(),
+ *    timeout]). Racing does not cancel the loser, and getCurrentPositionAsync
+ *    takes no abort signal (checked against expo-location in SDK 56), so every
+ *    timed-out attempt left a live high-accuracy GPS listener running for the
+ *    lifetime of the process. watchPositionAsync returns a subscription we can
+ *    remove(), so the native listener is released on every path.
+ *
+ * 2. NOT GRABBING THE FIRST FIX. watchPositionAsync fires as soon as ANY fix
+ *    exists, which on a cold start is often a coarse network/wifi position
+ *    hundreds of meters out. Returning that got it rejected a line later by
+ *    the caller's accuracy check, telling someone standing at their
+ *    destination that their signal was too weak -- when waiting two more
+ *    seconds would have produced a good GPS fix.
+ *
+ *    So: settle early once a fix is genuinely good, otherwise keep the most
+ *    precise one seen and hand that back when the clock runs out. Failing
+ *    outright is reserved for having no fix at all.
  */
 async function getPositionOnce() {
   let subscription = null;
   let timer = null;
+  let best = null;
+
+  const isBetter = (candidate, current) => {
+    if (!current) return true;
+    const a = candidate?.coords?.accuracy;
+    const b = current?.coords?.accuracy;
+    // A reading with no accuracy figure can't be shown to be an improvement.
+    if (a == null) return false;
+    if (b == null) return true;
+    return a < b;
+  };
 
   try {
     return await new Promise((resolve, reject) => {
@@ -48,17 +77,33 @@ async function getPositionOnce() {
         fn(arg);
       };
 
-      timer = setTimeout(
-        () => finish(reject, new Error(
+      timer = setTimeout(() => {
+        // Out of time: the best reading beats no reading. The caller still
+        // applies its own accuracy limit, so a hopeless fix is refused there
+        // with a message about signal rather than about timing.
+        if (best) finish(resolve, best);
+        else finish(reject, new Error(
           "Could not get your location. Please check your GPS/network signal and try again."
-        )),
-        FIX_TIMEOUT_MS
-      );
+        ));
+      }, FIX_TIMEOUT_MS);
 
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 0 },
-        (position) => finish(resolve, position),
-        (error) => finish(reject, error instanceof Error ? error : new Error(String(error)))
+        (position) => {
+          if (isBetter(position, best)) best = position;
+
+          const accuracy = position?.coords?.accuracy;
+          if (accuracy == null || accuracy <= GOOD_ACCURACY_M) {
+            finish(resolve, position);
+          }
+          // Otherwise keep listening -- accuracy improves as the fix settles.
+        },
+        (error) => {
+          // A stream error after we already have something usable shouldn't
+          // throw that away.
+          if (best) finish(resolve, best);
+          else finish(reject, error instanceof Error ? error : new Error(String(error)));
+        }
       )
         .then((sub) => {
           // The fix can arrive before this resolves; if finish() already ran,
