@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1073704340103",
+    "project_id": "hrms-54d23",
+    "storage_bucket": "hrms-54d23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073704340103:android:3f1be3403be200ea328622",
+        "android_client_info": {
+          "package_name": "com.ishwarimahagaonkar.employeemanagementsystem"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7lMi4prUY26vVCNgIGdMJhb4ACz2wI3E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
