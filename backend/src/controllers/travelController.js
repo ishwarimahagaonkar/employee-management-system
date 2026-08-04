@@ -238,21 +238,38 @@ exports.startTrip = async (req, res) => {
         const lastTrip = travel.trips[travel.trips.length - 1];
 
         // The previous trip must have its meeting logged before a new one can
-        // start. Checked against yesterday too, because a trip that ran past
-        // midnight ended in yesterday's document -- scoping this to today let
-        // such a trip escape the requirement entirely.
+        // start -- but ONLY if that trip ended today.
+        //
+        // Yesterday's document is consulted because a trip that ran past
+        // midnight ends there, and it still owes its meeting. What must NOT
+        // happen is blocking on an OLD unlogged trip: an earlier version of
+        // this check looked at the previous day unconditionally, so a trip
+        // finished last night with no meeting notes locked its owner out of
+        // travel entirely the next morning. Worse, an app on older JS reads
+        // "pending meeting" from today's trips alone, so it never offered the
+        // button that would clear it -- a dead end with no way forward.
+        //
+        // Requiring the trip to have ended TODAY keeps the midnight case
+        // covered and makes the lockout impossible: come the next day, the
+        // requirement lapses and the trip is simply left unlogged.
         const previousDoc = lastTrip
             ? travel
             : await Travel.findOne({ userId, date: { $lt: date } }).sort({ date: -1 });
 
         const previousTrip = previousDoc?.trips?.[previousDoc.trips.length - 1];
 
+        const endedToday =
+            previousTrip?.endTime &&
+            new Date(previousTrip.endTime).toLocaleDateString("en-CA", {
+                timeZone: "Asia/Kolkata",
+            }) === date;
+
         // A trip closed by the repair script has no end location and no real
         // duration, so demanding meeting notes for it would block the user on
         // a journey nobody can now describe.
         if (
             previousTrip &&
-            previousTrip.endTime &&
+            endedToday &&
             previousTrip.distanceSource !== "unrecorded" &&
             !previousTrip.meetingDetails?.customerName
         ) {
