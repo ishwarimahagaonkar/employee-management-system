@@ -24,7 +24,6 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION"
-
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -57,7 +56,10 @@
           "locationAlwaysPermission": "StaffTrack records your location during business trips to calculate accurate travel distance.",
           "locationWhenInUsePermission": "StaffTrack uses your location to verify attendance and track business trips."
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "expo-build-properties"
     ],
     "extra": {
       "eas": {
