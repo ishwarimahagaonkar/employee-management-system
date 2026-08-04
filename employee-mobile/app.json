@@ -2,7 +2,7 @@
   "expo": {
     "name": "StaffTrack",
     "slug": "employee-management-system",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -57,8 +57,6 @@
           "locationWhenInUsePermission": "StaffTrack uses your location to verify attendance and track business trips."
         }
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/crashlytics",
       "expo-build-properties"
     ],
     "extra": {
