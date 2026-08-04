@@ -10,6 +10,7 @@ import {
   clearTravelRoute,
   stopTrackingIfStale,
 } from "../../../../tasks/travelTracking.js";
+import { breadcrumb, reportError } from "../../../../services/crashReporter";
 
 // Most recent trips shown in the history list.
 const HISTORY_LIMIT = 5;
@@ -294,32 +295,49 @@ export default function useTravel() {
     }
   };
 
+  // Breadcrumbed step by step because this is the flow that has been killing
+  // the app in the field. A native crash here arrives with a stack that names
+  // no JS at all, so the last breadcrumb before it is what identifies the
+  // stage that failed -- acquiring the GPS fix, stopping the background task,
+  // or the upload itself.
   const endTrip = async (onSuccess) => {
     try {
       setBtnLoading(true);
+      breadcrumb("endTrip: start");
 
       const token = await AsyncStorage.getItem("token");
+
+      breadcrumb("endTrip: acquiring fix");
       const loc = await getLocation();
+      breadcrumb(`endTrip: fix acquired (accuracy=${Math.round(loc?.accuracy ?? -1)}m)`);
 
       // Hand the recorded GPS route to the backend so it can sum the actual
       // path driven. Empty when background tracking was off — the backend
       // then falls back to the routed start→end distance. The stored route
       // is only cleared after the server confirms, so a failed request can
       // be retried without losing the recorded path.
+      breadcrumb("endTrip: stopping tracking");
       const route = await stopTravelTracking();
+      breadcrumb(`endTrip: tracking stopped (${route?.length ?? 0} points)`);
 
       await api.post(
         "/travel/end",
         { ...loc, route },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      breadcrumb("endTrip: server accepted");
 
       await clearTravelRoute();
 
       await fetchTravel();
       await fetchHistory();
+      breadcrumb("endTrip: done");
       onSuccess?.();
     } catch (err) {
+      // A failure the user was shown is still worth a report: the alert only
+      // reaches the person holding the phone, and "End Trip keeps failing"
+      // has so far arrived without any detail attached.
+      reportError(err, "endTrip failed");
       Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
     } finally {
       setBtnLoading(false);

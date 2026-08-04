@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { reportError } from "../services/crashReporter";
 
 // A render error anywhere in the tree used to take the entire app down: on a
 // release build Android kills the process on an unhandled JS exception, so an
@@ -14,8 +15,17 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    const where = this.props.name || "screen";
+
     // Surfaces in `adb logcat` / the Metro console when reproducing a report.
-    console.error(`[${this.props.name || "screen"}] crashed:`, error, info?.componentStack);
+    console.error(`[${where}] crashed:`, error, info?.componentStack);
+
+    // Catching the error here means it never becomes a fatal exception, so
+    // the handler Crashlytics installs never sees it. Without this call the
+    // boundary would quietly hide exactly the crashes we added Crashlytics
+    // to find. The component stack goes along because a minified release
+    // stack alone rarely says which screen was on screen.
+    reportError(error, `ErrorBoundary(${where})${info?.componentStack || ""}`);
   }
 
   retry = () => {

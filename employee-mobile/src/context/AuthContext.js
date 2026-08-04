@@ -3,6 +3,7 @@ import { Alert, AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { setUnauthorizedHandler } from "../api/api.js";
 import { getApiErrorMessage } from "../utils/apiError.js";
+import { forget, identify } from "../services/crashReporter";
 
 export const AuthContext = createContext();
 
@@ -15,6 +16,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkLogin();
   }, []);
+
+  // Tags crash reports with whoever is signed in. Driven off `user` rather
+  // than the login call so every route in gets covered -- a fresh login, a
+  // restored session, a profile refetch -- and so a logout or an expired
+  // token clears the tag without each of those paths having to remember to.
+  useEffect(() => {
+    if (user) {
+      identify(user);
+    } else {
+      forget();
+    }
+  }, [user]);
 
   // The server can reject a stored token at any time (account deactivated, or
   // a logout elsewhere invalidated it). Drop straight to the login screen
