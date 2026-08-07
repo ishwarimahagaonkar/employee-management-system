@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
@@ -13,9 +14,12 @@ import api from "../../api/api.js";
 import ErrorState from "../../components/ErrorState";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { AuthContext } from "../../context/AuthContext";
+import { useActiveSite } from "../../context/SiteContext";
 
 import DailyReportForm from "./components/DailyReportForm";
-import SiteChipSelector from "./components/SiteChipSelector";
+import SiteHeader from "../../components/SiteHeader";
+import MonthSelector, { monthRange, monthLabel } from "./components/MonthSelector";
+import ReportListItem from "./components/ReportListItem";
 
 const dateStr = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 const todayStr = () => dateStr(new Date());
@@ -36,37 +40,47 @@ const prettyDate = (yyyyMmDd) => {
   });
 };
 
-// One report per site per day. This screen always shows exactly one: either
-// the report already filed for the chosen site and date, or a blank form.
+// Asia/Kolkata "now", so the month view opens on the right month.
+const nowParts = () => {
+  const [y, m] = todayStr().split("-").map(Number);
+  return { year: y, month: m - 1 };
+};
+
+// One report per site per day, and two ways of looking at them:
+//
+//   day   -- the supervisor's job: file or correct ONE report for the active
+//            site on one date.
+//   month -- the overseer's job: what happened across every site this month,
+//            with the present/absent counts and what the supervisor wrote.
+//
+// Admin and manager land on the month view because they are reviewing; a
+// supervisor lands on the day form because they are filing. Either can switch.
 export default function DailyWorkReportScreen({ navigation }) {
   const { user } = useContext(AuthContext);
-  const canSubmit = user?.role === "admin" || user?.role === "supervisor";
+  // Mirrors dailyReport:submit in backend/src/config/roles.js. Admin is
+  // deliberately absent: it reads reports but never files or corrects one.
+  const canSubmit = user?.role === "manager" || user?.role === "supervisor";
+  const oversees = user?.role === "admin" || user?.role === "manager";
 
-  const [sites, setSites] = useState([]);
-  const [selectedSiteId, setSelectedSiteId] = useState(null);
+  // Active site is shared session state -- see SiteContext. Switching here
+  // carries to Attendance and Labour too.
+  const { activeSite, activeSiteId, changeSite, loading: loadingSites } = useActiveSite();
+
+  const [mode, setMode] = useState(oversees ? "month" : "day");
+
+  const [period, setPeriod] = useState(nowParts);
+  const [reports, setReports] = useState([]);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const [monthError, setMonthError] = useState(null);
+
   const [date, setDate] = useState(todayStr());
   const [report, setReport] = useState(null);
   const [editable, setEditable] = useState(true);
   const [counts, setCounts] = useState({ present: 0, absent: 0, marked: false });
-  const [loadingSites, setLoadingSites] = useState(true);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-
-  const fetchSites = async () => {
-    try {
-      setError(null);
-      const res = await api.get("/sites");
-      const list = res.data.sites || [];
-      setSites(list);
-      if (list.length > 0) setSelectedSiteId((prev) => prev || list[0]._id);
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    } finally {
-      setLoadingSites(false);
-    }
-  };
 
   // The report and the attendance counts are fetched together: a blank form
   // still has to show how many labourers were present, since those numbers are
@@ -88,11 +102,11 @@ export default function DailyWorkReportScreen({ navigation }) {
       const found = (reportRes.data.reports || [])[0] || null;
       setReport(found);
 
-      // A report filed on an earlier day is settled for supervisors; admins
-      // can always correct it.
+      // A report filed on an earlier day is settled for supervisors; the
+      // manager above them can always correct it.
       if (found) {
         const filedOn = dateStr(new Date(found.createdAt));
-        setEditable(user?.role === "admin" || filedOn === todayStr());
+        setEditable(user?.role === "manager" || filedOn === todayStr());
       } else {
         setEditable(canSubmit);
       }
@@ -112,12 +126,49 @@ export default function DailyWorkReportScreen({ navigation }) {
   };
 
   useEffect(() => {
-    fetchSites();
+    if (mode === "day" && activeSiteId) fetchDay(activeSiteId, date);
+  }, [mode, activeSiteId, date]);
+
+  // Every report filed in the chosen month, across ALL sites -- no siteId is
+  // sent. The server already scopes this: a supervisor only ever gets their own
+  // sites back, so the same call is safe for whoever is looking.
+  const fetchMonth = useCallback(async (year, month) => {
+    setLoadingMonth(true);
+    setMonthError(null);
+
+    try {
+      const { startDate, endDate } = monthRange(year, month);
+      const res = await api.get("/daily-reports", { params: { startDate, endDate } });
+      setReports(res.data.reports || []);
+    } catch (err) {
+      setMonthError(getApiErrorMessage(err));
+      setReports([]);
+    } finally {
+      setLoadingMonth(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (selectedSiteId) fetchDay(selectedSiteId, date);
-  }, [selectedSiteId, date]);
+    if (mode === "month") fetchMonth(period.year, period.month);
+  }, [mode, period, fetchMonth]);
+
+  // Opening a report from the list jumps the day view to that report's site
+  // AND date. Both are required: the month list spans every site, so moving
+  // only the date would open a DIFFERENT site's report for that day -- or a
+  // blank form -- while appearing to have opened the one that was tapped.
+  const openReport = useCallback(
+    (report) => {
+      const siteId = report.siteId?._id || report.siteId;
+
+      if (siteId && String(siteId) !== String(activeSiteId)) {
+        changeSite(siteId);
+      }
+
+      setDate(report.date);
+      setMode("day");
+    },
+    [activeSiteId, changeSite]
+  );
 
   // Returns an error message for the form to show inline, or null once saved.
   const handleSubmit = async (form) => {
@@ -128,11 +179,11 @@ export default function DailyWorkReportScreen({ navigation }) {
         await api.put(`/daily-reports/${report._id}`, form);
         setNotice("Report updated");
       } else {
-        await api.post("/daily-reports", { siteId: selectedSiteId, date, ...form });
+        await api.post("/daily-reports", { siteId: activeSiteId, date, ...form });
         setNotice("Daily report submitted");
       }
 
-      await fetchDay(selectedSiteId, date);
+      await fetchDay(activeSiteId, date);
       return null;
     } catch (err) {
       return getApiErrorMessage(err);
@@ -142,7 +193,7 @@ export default function DailyWorkReportScreen({ navigation }) {
   };
 
   const isToday = date === todayStr();
-  const noSites = !loadingSites && sites.length === 0;
+  const noSite = !loadingSites && !activeSiteId;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -151,12 +202,68 @@ export default function DailyWorkReportScreen({ navigation }) {
           <Ionicons name="menu" size={24} color="#1E1B4B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Daily Work Report</Text>
-        <View style={styles.headerSpacer} />
+
+        {/* Everyone gets both views. A supervisor filing today still wants to
+            look back over the month, and a manager correcting a report needs
+            the day form. Only the landing view differs by role. */}
+        <TouchableOpacity
+          style={styles.modeBtn}
+          onPress={() => setMode(mode === "month" ? "day" : "month")}
+        >
+          <Ionicons
+            name={mode === "month" ? "create-outline" : "calendar-outline"}
+            size={20}
+            color="#112250"
+          />
+        </TouchableOpacity>
       </View>
 
-      {loadingSites ? (
+      {mode === "month" ? (
+        <>
+          <MonthSelector
+            year={period.year}
+            month={period.month}
+            onChange={(year, month) => setPeriod({ year, month })}
+          />
+
+          {loadingMonth ? (
+            <ActivityIndicator size="large" color="#112250" style={styles.loader} />
+          ) : monthError ? (
+            <ErrorState
+              message={monthError}
+              onRetry={() => fetchMonth(period.year, period.month)}
+            />
+          ) : (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryText}>
+                  {reports.length === 0
+                    ? "No reports"
+                    : `${reports.length} report${reports.length === 1 ? "" : "s"}` +
+                      ` · ${reports.reduce((n, r) => n + (r.labourPresent || 0), 0)} labour present`}
+                </Text>
+              </View>
+
+              <FlatList
+                data={reports}
+                keyExtractor={(item) => item._id}
+                contentContainerStyle={styles.list}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <ReportListItem report={item} onPress={openReport} />
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>
+                    Nothing was filed in {monthLabel(period.year, period.month)}.
+                  </Text>
+                }
+              />
+            </>
+          )}
+        </>
+      ) : loadingSites ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
-      ) : noSites ? (
+      ) : noSite ? (
         <Text style={styles.emptyText}>
           {user?.role === "supervisor"
             ? "No sites assigned to you yet."
@@ -164,11 +271,7 @@ export default function DailyWorkReportScreen({ navigation }) {
         </Text>
       ) : (
         <>
-          <SiteChipSelector
-            sites={sites}
-            selectedId={selectedSiteId}
-            onSelect={setSelectedSiteId}
-          />
+          <SiteHeader onSiteChange={(siteId) => fetchDay(siteId, date)} />
 
           <View style={styles.dateBar}>
             <TouchableOpacity style={styles.dateArrow} onPress={() => setDate(shiftDate(date, -1))}>
@@ -196,7 +299,7 @@ export default function DailyWorkReportScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator size="large" color="#112250" style={styles.loader} />
           ) : error ? (
-            <ErrorState message={error} onRetry={() => fetchDay(selectedSiteId, date)} />
+            <ErrorState message={error} onRetry={() => fetchDay(activeSiteId, date)} />
           ) : !report && !canSubmit ? (
             // Managers can read reports but never file them, so an empty form
             // would just be a wall of dead inputs.
@@ -243,6 +346,33 @@ const styles = StyleSheet.create({
 
   headerSpacer: {
     width: 24,
+  },
+
+  modeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  summaryRow: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+
+  summaryText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+
+  list: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
 
   dateBar: {

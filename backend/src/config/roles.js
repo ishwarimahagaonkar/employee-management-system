@@ -66,26 +66,31 @@ const PERMISSIONS = {
     "settings:manage": [ROLES.ADMIN],
     "holiday:manage": [ROLES.ADMIN],
 
-    // --- Sites (supervisor creates; admin and manager oversee) ---
+    // --- Sites (anyone who runs work can open one; admin and manager oversee) ---
     "site:view": [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR],
-    "site:create": [ROLES.SUPERVISOR],
+    "site:create": [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR],
     "site:manage": [ROLES.ADMIN, ROLES.MANAGER],
 
     // --- Labour ---
+    // Everyone with labour access can READ the master list, but only the
+    // supervisor -- the person actually standing on site -- writes to it.
+    // Admin and manager oversee through the reports the supervisor files.
     "labour:view": [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR],
-    "labour:manage": [ROLES.ADMIN, ROLES.SUPERVISOR],
-    // Supervisors mark the daily sheet. Admin is included so a mistake found
-    // after the supervisor's same-day edit window closes can still be fixed;
-    // without it a typo would be permanent.
-    "labour:attendance": [ROLES.ADMIN, ROLES.SUPERVISOR],
+    "labour:manage": [ROLES.SUPERVISOR],
+    // Supervisor only, deliberately. Admin used to be included so a mistake
+    // found after the supervisor's same-day edit window closed could still be
+    // fixed. That escape hatch is now gone by choice: the trade is that a
+    // wrong entry on a past day can no longer be corrected by anyone.
+    "labour:attendance": [ROLES.SUPERVISOR],
     "labour:report": [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR],
 
     // --- Supervisor daily work update ---
-    // Supervisors file the report. Admin is included for the same reason as
-    // labour:attendance: the supervisor's edit window closes at the end of the
-    // day, so without this a mistake spotted tomorrow could never be fixed.
-    // Managers deliberately stay read-only here.
-    "dailyReport:submit": [ROLES.ADMIN, ROLES.SUPERVISOR],
+    // Supervisors file the report. The manager above them is the one who can
+    // still correct it after the supervisor's same-day edit window closes --
+    // they run the sites day to day, so they are the ones who would know a
+    // figure is wrong. Admin is deliberately read-only here: it oversees
+    // through the reports rather than authoring them.
+    "dailyReport:submit": [ROLES.MANAGER, ROLES.SUPERVISOR],
     "dailyReport:view": [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR],
 };
 

@@ -3,6 +3,7 @@ const User = require("../models/User");
 const { getPagination } = require("../utils/pagination");
 const { isValidCoord } = require("../utils/locationCheck");
 const { STAFF_ROLES } = require("../config/roles");
+const { resolveCapturedAt } = require("../utils/capturedAt");
 
 // Validates a list of co-traveler ids: keeps only active, same-company staff
 // (admins no longer travel), excluding the trip creator. Returns ObjectIds.
@@ -199,7 +200,7 @@ async function findOpenTrip(userId) {
 exports.startTrip = async (req, res) => {
     try {
         const userId = req.user._id; // 🔥 FROM TOKEN
-        const { purpose, lat, lng, address, coTravelers } = req.body;
+        const { purpose, lat, lng, address, coTravelers, capturedAt, clientRequestId } = req.body;
 
         if (!purpose || !purpose.trim()) {
             return res.status(400).json({ success: false, message: "Trip purpose is required" });
@@ -207,6 +208,32 @@ exports.startTrip = async (req, res) => {
 
         if (!isValidCoord(lat) || !isValidCoord(lng)) {
             return res.status(400).json({ success: false, message: "Valid start location is required" });
+        }
+
+        const when = resolveCapturedAt(capturedAt);
+        if (when.error) {
+            return res.status(400).json({ success: false, message: when.error });
+        }
+
+        // A trip has no natural unique key -- several a day are legitimate --
+        // so a replayed "start trip" from the offline queue would create a
+        // second one. Answering the replay with the trip it already created
+        // makes the retry a no-op instead, which is what lets the client keep
+        // retrying safely until it gets an answer.
+        if (clientRequestId) {
+            const already = await Travel.findOne({
+                userId,
+                "trips.clientRequestId": String(clientRequestId),
+            });
+
+            if (already) {
+                return res.status(200).json({
+                    success: true,
+                    message: "Trip started successfully",
+                    data: already,
+                    duplicate: true,
+                });
+            }
         }
 
         const validCoTravelers = await resolveCoTravelers(coTravelers, userId, req.user.companyId);
@@ -283,7 +310,10 @@ exports.startTrip = async (req, res) => {
         travel.trips.push({
             purpose,
             userId,
-            startTime: new Date(),
+            startTime: when.at,
+            startReceivedAt: when.receivedAt,
+            startOffline: when.offline,
+            clientRequestId: clientRequestId ? String(clientRequestId) : null,
             startLocation: { lat, lng, address },
             endTime: null,
             endLocation: null,
@@ -314,10 +344,15 @@ exports.startTrip = async (req, res) => {
 exports.endTrip = async (req, res) => {
     try {
         const userId = req.user._id; // 🔥 FROM TOKEN
-        const { lat, lng, address, route } = req.body;
+        const { lat, lng, address, route, capturedAt } = req.body;
 
         if (!isValidCoord(lat) || !isValidCoord(lng)) {
             return res.status(400).json({ success: false, message: "Valid end location is required" });
+        }
+
+        const when = resolveCapturedAt(capturedAt);
+        if (when.error) {
+            return res.status(400).json({ success: false, message: when.error });
         }
 
         // Looked up by open-trip rather than by today's date, so a trip that
@@ -332,7 +367,18 @@ exports.endTrip = async (req, res) => {
         }
 
         const { travel, trip: lastTrip } = open;
-        const endTime = new Date();
+
+        // Duration is computed from this, so a queued end must record when the
+        // trip actually finished rather than when the phone regained signal --
+        // otherwise a two-hour sync delay reads as two hours of travel.
+        const endTime = when.at;
+
+        if (endTime < lastTrip.startTime) {
+            return res.status(400).json({
+                success: false,
+                message: "Trip cannot end before it started. Check your device's clock.",
+            });
+        }
 
         const straightKm = calculateDistance(
             lastTrip.startLocation.lat,
@@ -381,6 +427,8 @@ exports.endTrip = async (req, res) => {
         }
 
         lastTrip.endTime = endTime;
+        lastTrip.endReceivedAt = when.receivedAt;
+        lastTrip.endOffline = when.offline;
         lastTrip.endLocation = { lat, lng, address };
         lastTrip.distanceKm = Number(distance.toFixed(2));
         lastTrip.distanceSource = distanceSource;

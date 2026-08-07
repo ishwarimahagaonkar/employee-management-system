@@ -9,13 +9,36 @@ const { calculateWorkingHours } = require("../utils/timeCalculator");
 const { getPagination } = require("../utils/pagination");
 const { monthDateRange } = require("../utils/monthRange");
 const { savePunchPhoto, readPunchPhoto } = require("../utils/photoStorage");
+const { resolveCapturedAt } = require("../utils/capturedAt");
 
+// Upserted in one statement rather than findOne-then-create.
+//
+// This runs on every punch, so it had the widest concurrency exposure in the
+// system: two employees punching in at a company with no settings row yet
+// could both miss the findOne and both create one. From then on every read
+// returned an arbitrary one of the two, and an admin's geofence change
+// appeared to apply only half the time.
+//
+// The unique index on companyId can still reject a genuinely simultaneous
+// upsert; that means the other request just created the row, so re-reading is
+// the correct answer rather than an error.
 const getOrgSettings = async (companyId) => {
-  let settings = await Settings.findOne({ companyId: companyId ?? null });
-  if (!settings) {
-    settings = await Settings.create({ companyId: companyId ?? null });
+  const scoped = companyId ?? null;
+
+  try {
+    // returnDocument rather than `new: true` -- Mongoose 9 deprecates the
+    // latter and warns on every call, which on this path means once per punch.
+    return await Settings.findOneAndUpdate(
+      { companyId: scoped },
+      { $setOnInsert: { companyId: scoped } },
+      { returnDocument: "after", upsert: true }
+    );
+  } catch (err) {
+    if (err.code === 11000) {
+      return await Settings.findOne({ companyId: scoped });
+    }
+    throw err;
   }
-  return settings;
 };
 
 // Parses "HH:MM" into total minutes since midnight
@@ -49,11 +72,20 @@ exports.punchIn = async (req, res) => {
 
   try {
 
-    const { lat, lng, address, photo } = req.body;
+    const { lat, lng, address, photo, capturedAt } = req.body;
+
+    // When this punch actually happened. Absent on a live request (and on any
+    // app predating offline support), in which case this is simply now.
+    const when = resolveCapturedAt(capturedAt);
+    if (when.error) {
+      return res.status(400).json({ message: when.error });
+    }
 
     const settings = await getOrgSettings(req.user.companyId);
 
-    // Create today's date string in Asia/Kolkata timezone (YYYY-MM-DD)
+    // Today in Asia/Kolkata. Safe to derive from the server clock even for a
+    // queued punch: resolveCapturedAt refuses anything from another calendar
+    // day, so both clocks agree on the date by construction.
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
     // Prevent multiple punch-ins on same day
@@ -87,16 +119,20 @@ exports.punchIn = async (req, res) => {
       });
     }
 
-    const now = new Date();
-
-    const attendanceStatus = isPunchInLate(now, settings) ? "late" : "present";
+    // Lateness is judged against when they actually arrived, not when the
+    // request reached us -- otherwise an employee who punched in at 09:00 and
+    // only regained signal at 11:00 would be marked late for a queue delay
+    // they had no control over.
+    const attendanceStatus = isPunchInLate(when.at, settings) ? "late" : "present";
 
     // Create attendance record
     const attendance = await Attendance.create({
       userId: req.user._id,
       companyId: req.user.companyId,
       date: todayStr,
-      punchInTime: now,
+      punchInTime: when.at,
+      punchInReceivedAt: when.receivedAt,
+      punchInOffline: when.offline,
       punchInLocation: {
         lat,
         lng,
@@ -113,6 +149,19 @@ exports.punchIn = async (req, res) => {
       attendance,
     });
   } catch (err) {
+    // The findOne above and the create below are not atomic, so two requests
+    // can both pass the "already punched in" check. The unique index on
+    // (userId, date) is what actually stops the second one from being written;
+    // this turns its rejection into the same answer the check would have given.
+    //
+    // The common cause is not a double tap -- it is the punch request timing
+    // out on a weak signal, the employee retrying, and the first request
+    // landing afterwards.
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "Already punched in today" });
+    }
+
+    console.error("punchIn error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -130,7 +179,12 @@ exports.punchIn = async (req, res) => {
  */
 exports.punchOut = async (req, res) => {
   try {
-    const { lat, lng, address, photo } = req.body;
+    const { lat, lng, address, photo, capturedAt } = req.body;
+
+    const when = resolveCapturedAt(capturedAt);
+    if (when.error) {
+      return res.status(400).json({ message: when.error });
+    }
 
     const settings = await getOrgSettings(req.user.companyId);
 
@@ -155,11 +209,17 @@ exports.punchOut = async (req, res) => {
 
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
-    // Find today's attendance record
+    // Find today's attendance record.
+    //
+    // Sorted, even though the unique index now guarantees there is only one:
+    // a deployment that has not yet run scripts/fixAttendanceDuplicates.js may
+    // still hold legacy duplicates, and an unsorted findOne would pick between
+    // them arbitrarily -- which is how a duplicate turned into wrong payroll
+    // hours. Earliest punch-in is the real start of the day.
     const attendance = await Attendance.findOne({
       userId: req.user._id,
       date: todayStr,
-    });
+    }).sort({ punchInTime: 1 });
 
     if (!attendance) {
       return res.status(404).json({
@@ -175,8 +235,19 @@ exports.punchOut = async (req, res) => {
       });
     }
 
+    // A queued punch-out must not be recorded as having happened when it was
+    // finally delivered: working hours are computed from this value, so a
+    // two-hour sync delay would otherwise be paid as two hours worked.
+    if (when.at < attendance.punchInTime) {
+      return res.status(400).json({
+        message: "Punch-out cannot be earlier than punch-in. Check your device's clock.",
+      });
+    }
+
     // Store punch-out details
-    attendance.punchOutTime = new Date();
+    attendance.punchOutTime = when.at;
+    attendance.punchOutReceivedAt = when.receivedAt;
+    attendance.punchOutOffline = when.offline;
     attendance.punchOutLocation = { lat, lng, address, };
     attendance.punchOutPhoto = savePunchPhoto(photo);
 

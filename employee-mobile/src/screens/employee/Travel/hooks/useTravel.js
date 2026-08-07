@@ -11,6 +11,7 @@ import {
   stopTrackingIfStale,
 } from "../../../../tasks/travelTracking.js";
 import { breadcrumb, reportError } from "../../../../services/crashReporter";
+import { enqueue, KINDS } from "../../../../services/offlineQueue";
 
 // Most recent trips shown in the history list.
 const HISTORY_LIMIT = 5;
@@ -257,6 +258,11 @@ export default function useTravel() {
   };
 
   const startTrip = async (purpose, coTravelers = [], onSuccess) => {
+    // Held outside the try so the offline path can queue the location that was
+    // actually captured, rather than asking the GPS for a second fix while the
+    // employee is already walking to the car.
+    let loc = null;
+
     try {
       if (!purpose.trim()) {
         Alert.alert("Enter purpose");
@@ -266,7 +272,7 @@ export default function useTravel() {
       setBtnLoading(true);
 
       const token = await AsyncStorage.getItem("token");
-      const loc = await getLocation();
+      loc = await getLocation();
 
       await api.post(
         "/travel/start",
@@ -289,6 +295,29 @@ export default function useTravel() {
       await fetchTravel();
       onSuccess?.();
     } catch (err) {
+      // No response means the request never landed. The employee is about to
+      // drive, so refusing to start the trip would cost them the whole
+      // journey's distance -- queue it and start tracking regardless. The
+      // route is already recorded locally, so nothing depends on the server
+      // having acknowledged the start.
+      // Only queueable once a location was actually captured -- a failure
+      // before that point has nothing to record.
+      if (!err.response && loc) {
+        await enqueue({
+          kind: KINDS.TRIP_START,
+          payload: { ...loc, purpose, coTravelers },
+        });
+
+        await startTravelTracking();
+
+        Alert.alert(
+          "Trip started offline",
+          "No internet connection. This trip has been saved on your device and will be submitted automatically once you are back online."
+        );
+        onSuccess?.();
+        return;
+      }
+
       Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
     } finally {
       setBtnLoading(false);
@@ -301,6 +330,9 @@ export default function useTravel() {
   // stage that failed -- acquiring the GPS fix, stopping the background task,
   // or the upload itself.
   const endTrip = async (onSuccess) => {
+    let loc = null;
+    let route = null;
+
     try {
       setBtnLoading(true);
       breadcrumb("endTrip: start");
@@ -308,7 +340,7 @@ export default function useTravel() {
       const token = await AsyncStorage.getItem("token");
 
       breadcrumb("endTrip: acquiring fix");
-      const loc = await getLocation();
+      loc = await getLocation();
       breadcrumb(`endTrip: fix acquired (accuracy=${Math.round(loc?.accuracy ?? -1)}m)`);
 
       // Hand the recorded GPS route to the backend so it can sum the actual
@@ -317,7 +349,7 @@ export default function useTravel() {
       // is only cleared after the server confirms, so a failed request can
       // be retried without losing the recorded path.
       breadcrumb("endTrip: stopping tracking");
-      const route = await stopTravelTracking();
+      route = await stopTravelTracking();
       breadcrumb(`endTrip: tracking stopped (${route?.length ?? 0} points)`);
 
       await api.post(
@@ -338,6 +370,28 @@ export default function useTravel() {
       // reaches the person holding the phone, and "End Trip keeps failing"
       // has so far arrived without any detail attached.
       reportError(err, "endTrip failed");
+
+      // The route is the expensive part -- it took the whole journey to
+      // record and cannot be reconstructed. Queue it with the end location so
+      // the distance survives, then clear it locally, since the queue now owns
+      // the only copy and leaving a second one would double-count on retry.
+      if (!err.response && loc) {
+        await enqueue({
+          kind: KINDS.TRIP_END,
+          payload: { ...loc, route: route || [] },
+        });
+
+        await clearTravelRoute();
+
+        breadcrumb(`endTrip: queued offline (${route?.length ?? 0} route points)`);
+        Alert.alert(
+          "Trip ended offline",
+          "No internet connection. This trip and its recorded route have been saved on your device and will be submitted automatically once you are back online."
+        );
+        onSuccess?.();
+        return;
+      }
+
       Alert.alert("Error", err.response?.data?.message || err.message || "Failed");
     } finally {
       setBtnLoading(false);

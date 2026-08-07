@@ -74,4 +74,20 @@ const settingsSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// One settings document per company -- enforced by the database.
+//
+// Every controller reads settings with findOne({ companyId }), so a second
+// document for the same company does not fail loudly: it makes findOne return
+// an arbitrary one of the two. An admin changes the geofence or the late
+// cut-off and it appears to work only intermittently, because half the punches
+// read the other row. That is close to undiagnosable from user reports.
+//
+// getOrgSettings() runs on EVERY punch, which gave this the widest concurrency
+// exposure of any path in the system. The callers now upsert atomically; this
+// index is what makes the guarantee real rather than conventional.
+//
+// null is a value to MongoDB, so this also allows exactly one companyId: null
+// document -- the pre-multi-tenant row -- which is the intent.
+settingsSchema.index({ companyId: 1 }, { unique: true });
+
 module.exports = mongoose.model("Settings", settingsSchema);

@@ -21,8 +21,28 @@ const travelSchema = new mongoose.Schema({
     trips: [
         {
             purpose: String,
+
+            // The real trip times -- when a start or end is replayed from the
+            // client's offline queue these hold when it actually happened, not
+            // when the server received it. Distance and duration read these.
             startTime: Date,
             endTime: Date,
+
+            // When the server received each, and whether it came off the
+            // offline queue. See utils/capturedAt.js.
+            startReceivedAt: { type: Date, default: null },
+            endReceivedAt: { type: Date, default: null },
+            startOffline: { type: Boolean, default: false },
+            endOffline: { type: Boolean, default: false },
+
+            // Client-generated id for the request that created this trip.
+            //
+            // Unlike attendance, a trip has no natural unique key -- an
+            // employee may legitimately make several in a day -- so a replayed
+            // "start trip" would otherwise create a second one. Matching on
+            // this makes the replay a no-op instead. Absent on trips created
+            // by an app that predates offline support.
+            clientRequestId: { type: String, default: null },
 
             startLocation: {
                 lat: Number,

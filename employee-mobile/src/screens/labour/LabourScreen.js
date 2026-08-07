@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -16,72 +16,51 @@ import ErrorState from "../../components/ErrorState";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { AuthContext } from "../../context/AuthContext";
 
-import LabourListItem from "./components/LabourListItem";
+import LabourListItem, { LABOUR_ROW_HEIGHT } from "./components/LabourListItem";
 import LabourFormModal from "./components/LabourFormModal";
-import SiteChipSelector from "./components/SiteChipSelector";
 
-// Labour belongs to a site, so this screen is always "labour at site X".
-//   supervisor -> their own sites, and can add/edit labour
-//   admin      -> every site, and can add/edit labour
-//   manager    -> every site, read-only (labour:manage excludes manager)
+const ROW_STRIDE = LABOUR_ROW_HEIGHT + 6;
+
+// The company's MASTER labour list. There is no site selector here any more:
+// a labourer belongs to the company, not to a site, and which site they work
+// is decided per day on the attendance roster.
+//   supervisor -> sees everyone, can add/edit (needed to build a roster)
+//   admin      -> sees everyone, can add/edit
+//   manager    -> sees everyone, read-only (labour:manage excludes manager)
 export default function LabourScreen({ navigation }) {
   const { user } = useContext(AuthContext);
-  const canEdit = user?.role === "admin" || user?.role === "supervisor";
+  // Mirrors labour:manage in backend/src/config/roles.js -- supervisor only.
+  // Admin and manager read the master list but never write to it; they oversee
+  // through the reports the supervisor files.
+  const canEdit = user?.role === "supervisor";
 
-  const [sites, setSites] = useState([]);
-  const [selectedSiteId, setSelectedSiteId] = useState(null);
   const [labour, setLabour] = useState([]);
-  const [loadingSites, setLoadingSites] = useState(true);
-  const [loadingLabour, setLoadingLabour] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
   const [formVisible, setFormVisible] = useState(false);
   const [editingLabour, setEditingLabour] = useState(null);
 
-  const fetchSites = async () => {
+  const fetchLabour = async () => {
     try {
       setError(null);
-      const res = await api.get("/sites");
-      const list = res.data.sites || [];
-      setSites(list);
-
-      // Default to the first site so the screen has something to show.
-      if (list.length > 0) setSelectedSiteId((prev) => prev || list[0]._id);
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    } finally {
-      setLoadingSites(false);
-    }
-  };
-
-  const fetchLabour = async (siteId) => {
-    if (!siteId) return;
-
-    setLoadingLabour(true);
-
-    try {
-      setError(null);
-      const res = await api.get("/labour", { params: { siteId } });
+      const res = await api.get("/labour");
       setLabour(res.data.labour || []);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
-      setLoadingLabour(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSites();
+    fetchLabour();
   }, []);
 
-  useEffect(() => {
-    if (selectedSiteId) fetchLabour(selectedSiteId);
-  }, [selectedSiteId]);
-
   const retry = () => {
-    setLoadingSites(true);
+    setLoading(true);
     setError(null);
-    fetchSites();
+    fetchLabour();
   };
 
   const openAdd = () => {
@@ -89,10 +68,10 @@ export default function LabourScreen({ navigation }) {
     setFormVisible(true);
   };
 
-  const openEdit = (record) => {
+  const openEdit = useCallback((record) => {
     setEditingLabour(record);
     setFormVisible(true);
-  };
+  }, []);
 
   // Returns an error message for the form to show inline, or null once saved.
   const handleSubmit = async (form) => {
@@ -101,7 +80,6 @@ export default function LabourScreen({ navigation }) {
         await api.put(`/labour/${editingLabour._id}`, form);
       } else {
         await api.post("/labour", {
-          siteId: selectedSiteId,
           labourId: form.labourId,
           fullName: form.fullName,
           mobile: form.mobile,
@@ -110,14 +88,12 @@ export default function LabourScreen({ navigation }) {
       }
 
       setFormVisible(false);
-      await fetchLabour(selectedSiteId);
+      await fetchLabour();
       return null;
     } catch (err) {
       return getApiErrorMessage(err);
     }
   };
-
-  const selectedSite = sites.find((s) => String(s._id) === String(selectedSiteId));
 
   const filtered = labour.filter((l) =>
     [l.fullName, l.labourId, l.mobile]
@@ -127,8 +103,6 @@ export default function LabourScreen({ navigation }) {
       .includes(search.toLowerCase())
   );
 
-  const noSites = !loadingSites && sites.length === 0;
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -137,8 +111,7 @@ export default function LabourScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Labour</Text>
 
-        {/* Adding needs a site to add to, so the button waits for one. */}
-        {canEdit && selectedSiteId ? (
+        {canEdit ? (
           <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
             <Ionicons name="add" size={22} color="#fff" />
           </TouchableOpacity>
@@ -147,64 +120,52 @@ export default function LabourScreen({ navigation }) {
         )}
       </View>
 
-      {loadingSites ? (
+      {loading ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
-      ) : error && sites.length === 0 ? (
+      ) : error ? (
         <ErrorState message={error} onRetry={retry} />
-      ) : noSites ? (
-        <Text style={styles.emptyText}>
-          {user?.role === "supervisor"
-            ? "No sites assigned to you yet. Create a site first, then add labour to it."
-            : "No sites yet. A supervisor creates these before labour can be added."}
-        </Text>
       ) : (
         <>
-          <SiteChipSelector
-            sites={sites}
-            selectedId={selectedSiteId}
-            onSelect={setSelectedSiteId}
-          />
-
           <View style={styles.searchBox}>
             <Ionicons name="search-outline" size={18} color="#9CA3AF" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search labour..."
+              placeholder="Search name, ID or mobile"
               placeholderTextColor="#9CA3AF"
               value={search}
               onChangeText={setSearch}
             />
           </View>
 
-          {loadingLabour ? (
-            <ActivityIndicator size="large" color="#112250" style={styles.loader} />
-          ) : error ? (
-            <ErrorState message={error} onRetry={() => fetchLabour(selectedSiteId)} />
-          ) : (
-            <FlatList
-              data={filtered}
-              keyExtractor={(item) => item._id}
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>
-                  {canEdit
-                    ? "No labour at this site yet. Tap + to add the first."
-                    : "No labour at this site yet."}
-                </Text>
-              }
-              renderItem={({ item }) => (
-                <LabourListItem labour={item} canEdit={canEdit} onEdit={openEdit} />
-              )}
-            />
-          )}
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            getItemLayout={(_, index) => ({ length: ROW_STRIDE, offset: ROW_STRIDE * index, index })}
+            initialNumToRender={14}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>
+                {search
+                  ? "Nobody matches that search."
+                  : canEdit
+                    ? "No labour yet. Tap + to add your first worker.\n\nThey can then be put on any site's daily roster."
+                    : "No labour has been added yet."}
+              </Text>
+            }
+            renderItem={({ item }) => (
+              <LabourListItem labour={item} canEdit={canEdit} onEdit={openEdit} />
+            )}
+          />
         </>
       )}
 
       <LabourFormModal
         visible={formVisible}
         labour={editingLabour}
-        siteName={selectedSite?.name}
         onClose={() => setFormVisible(false)}
         onSubmit={handleSubmit}
       />
@@ -222,9 +183,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
 
   headerTitle: {
@@ -251,11 +212,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    marginHorizontal: 20,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
@@ -272,8 +233,8 @@ const styles = StyleSheet.create({
   },
 
   list: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
 
   emptyText: {

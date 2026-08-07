@@ -9,12 +9,14 @@ export const FEATURES = {
   /**
    * Sites, Labour, Labour Attendance, Daily Work Report and Labour Reports.
    *
-   * Off while the Travel / End Trip fixes ship on their own. These five move
-   * together on purpose: the daily report and the labour reports are built on
-   * top of sites and labour, so releasing them without the screens that create
-   * that data would leave dead ends rather than a smaller feature.
+   * These five move together on purpose: the daily report and the labour
+   * reports are built on top of sites and labour, so releasing them without
+   * the screens that create that data would leave dead ends rather than a
+   * smaller feature.
    *
-   * To re-enable: set this to true. No other change is needed.
+   * Was off while the Travel / End Trip fixes shipped on their own in 1.1.1.
+   * Back on now that labour runs on the company-wide master list -- the site
+   * a labourer worked lives on the attendance row, not on the labourer.
    */
-  labourManagement: false,
+  labourManagement: true,
 };

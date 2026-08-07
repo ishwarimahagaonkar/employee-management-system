@@ -1,7 +1,11 @@
 const Labour = require("../models/Labour");
-const Site = require("../models/Site");
 const { getPagination } = require("../utils/pagination");
-const { ROLES } = require("../config/roles");
+
+// Labour is a COMPANY-WIDE master list. There is no site scoping anywhere in
+// this controller: a labourer belongs to the company, and the site they worked
+// on a given day lives on that day's attendance row instead. Supervisors can
+// therefore search the whole list, which is what makes building a daily roster
+// possible.
 
 // The duplicate pre-check must use the SAME key the unique index is built on,
 // so it comes from the model rather than being re-implemented here.
@@ -14,51 +18,9 @@ const mobileDigitsOf = (mobile) => String(mobile || "").replace(/\D/g, "");
 const MOBILE_MIN_DIGITS = 7;
 const MOBILE_MAX_DIGITS = 15;
 
-
-/**
- * The site ids this user may see labour for. Returns null when the user is
- * unrestricted (admin and manager see the whole company).
- */
-const accessibleSiteIds = async (user) => {
-    if (user.role !== ROLES.SUPERVISOR) return null;
-
-    const sites = await Site.find({
-        companyId: user.companyId ?? null,
-        supervisorId: user._id,
-    }).select("_id");
-
-    return sites.map((s) => s._id);
-};
-
-
-/**
- * Loads a site the user is allowed to add or edit labour on.
- * Returns { site } or { error, status } -- the status travels with the error so
- * a missing field (400) isn't reported as a permission problem (403).
- */
-const resolveWritableSite = async (siteId, user) => {
-    if (!siteId) return { error: "Site is required", status: 400 };
-
-    const site = await Site.findOne({
-        _id: String(siteId),
-        companyId: user.companyId ?? null,
-    }).catch(() => null);
-
-    if (!site) return { error: "Site not found", status: 404 };
-
-    // A supervisor only runs their own sites; an admin may work on any of them.
-    if (
-        user.role === ROLES.SUPERVISOR &&
-        String(site.supervisorId ?? "") !== String(user._id)
-    ) {
-        return {
-            error: "You can only manage labour on sites assigned to you",
-            status: 403,
-        };
-    }
-
-    return { site };
-};
+// Escaped so a search for "a+b" or "(" can't blow up the regex or be used to
+// craft an expensive pattern.
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 
 // ==========================
@@ -66,7 +28,7 @@ const resolveWritableSite = async (siteId, user) => {
 // ==========================
 exports.createLabour = async (req, res) => {
     try {
-        const { siteId, labourId, fullName, mobile, address } = req.body;
+        const { labourId, fullName, mobile, address } = req.body;
 
         if (!labourId || !String(labourId).trim()) {
             return res.status(400).json({ message: "Labour ID is required" });
@@ -74,11 +36,6 @@ exports.createLabour = async (req, res) => {
 
         if (!fullName || !String(fullName).trim()) {
             return res.status(400).json({ message: "Full name is required" });
-        }
-
-        const { site, error, status } = await resolveWritableSite(siteId, req.user);
-        if (error) {
-            return res.status(status).json({ message: error });
         }
 
         const companyId = req.user.companyId ?? null;
@@ -119,7 +76,6 @@ exports.createLabour = async (req, res) => {
 
         const labour = await Labour.create({
             companyId,
-            siteId: site._id,
             labourId,
             fullName,
             mobile: mobile || "",
@@ -149,33 +105,27 @@ exports.createLabour = async (req, res) => {
 // ==========================
 exports.getLabour = async (req, res) => {
     try {
+        // The whole company's master list -- every role that may see labour
+        // sees all of it. A supervisor needs this to build a daily roster from
+        // anyone available, not just people who happened to work their site
+        // before. ?siteId is deliberately no longer accepted: labour has no
+        // site, so filtering by one would be meaningless.
         const filter = { companyId: req.user.companyId ?? null };
-
-        const siteIds = await accessibleSiteIds(req.user);
-        if (siteIds !== null) {
-            filter.siteId = { $in: siteIds };
-        }
-
-        // Narrowing to one site must stay inside whatever the user may already
-        // see, so a supervisor can't read another site's labour by passing its id.
-        if (req.query.siteId) {
-            if (siteIds !== null && !siteIds.some((id) => String(id) === String(req.query.siteId))) {
-                return res.status(403).json({
-                    message: "You can only view labour on sites assigned to you",
-                });
-            }
-            filter.siteId = String(req.query.siteId);
-        }
 
         if (req.query.status === "active" || req.query.status === "inactive") {
             filter.status = req.query.status;
         }
 
+        // Server-side search so the roster picker stays usable when the master
+        // list runs to hundreds of names.
+        if (req.query.search && String(req.query.search).trim()) {
+            const term = new RegExp(escapeRegex(String(req.query.search).trim()), "i");
+            filter.$or = [{ fullName: term }, { labourId: term }, { mobile: term }];
+        }
+
         const { paginate, page, limit, skip } = getPagination(req.query);
 
-        let queryBuilder = Labour.find(filter)
-            .populate("siteId", "name code")
-            .sort({ createdAt: -1 });
+        let queryBuilder = Labour.find(filter).sort({ fullName: 1 });
 
         if (paginate) {
             queryBuilder = queryBuilder.skip(skip).limit(limit);
@@ -205,19 +155,10 @@ exports.getLabour = async (req, res) => {
 // ==========================
 exports.getLabourById = async (req, res) => {
     try {
-        const filter = {
+        const labour = await Labour.findOne({
             _id: req.params.id,
             companyId: req.user.companyId ?? null,
-        };
-
-        const siteIds = await accessibleSiteIds(req.user);
-        if (siteIds !== null) {
-            filter.siteId = { $in: siteIds };
-        }
-
-        const labour = await Labour.findOne(filter)
-            .populate("siteId", "name code")
-            .catch(() => null);
+        }).catch(() => null);
 
         if (!labour) {
             return res.status(404).json({ message: "Labour not found" });
@@ -240,34 +181,21 @@ exports.getLabourById = async (req, res) => {
 // stale and let a duplicate past the unique indexes.
 exports.updateLabour = async (req, res) => {
     try {
-        const filter = {
+        const labour = await Labour.findOne({
             _id: req.params.id,
             companyId: req.user.companyId ?? null,
-        };
-
-        const siteIds = await accessibleSiteIds(req.user);
-        if (siteIds !== null) {
-            filter.siteId = { $in: siteIds };
-        }
-
-        const labour = await Labour.findOne(filter).catch(() => null);
+        }).catch(() => null);
 
         if (!labour) {
             return res.status(404).json({ message: "Labour not found" });
         }
 
         const companyId = req.user.companyId ?? null;
-        const { siteId, labourId, fullName, mobile, address, status } = req.body;
+        const { labourId, fullName, mobile, address, status } = req.body;
 
-        // Moving labour to another site: the destination must also be one the
-        // user may write to, or a supervisor could push labour onto any site.
-        if (siteId !== undefined && String(siteId) !== String(labour.siteId)) {
-            const { site, error, status } = await resolveWritableSite(siteId, req.user);
-            if (error) {
-                return res.status(status).json({ message: error });
-            }
-            labour.siteId = site._id;
-        }
+        // There is no "move labour to another site" any more, and that is the
+        // point: moving a labourer used to rewrite where they had always
+        // worked. Which site they work is decided per day, on the roster.
 
         if (labourId !== undefined) {
             if (!String(labourId).trim()) {
@@ -334,7 +262,6 @@ exports.updateLabour = async (req, res) => {
         }
 
         await labour.save();
-        await labour.populate("siteId", "name code");
 
         return res.status(200).json({
             message: "Labour updated successfully",

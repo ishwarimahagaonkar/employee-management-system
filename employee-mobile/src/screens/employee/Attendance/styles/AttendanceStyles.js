@@ -71,6 +71,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+  // Amber rather than red: a queued punch is safe, not an error. Red here
+  // would tell an employee something went wrong when nothing has.
+  pendingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FDE68A",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+
+  pendingText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400E",
+    lineHeight: 17,
+  },
+
   punchButton: {
     backgroundColor: "#fff",
     borderRadius: 18,

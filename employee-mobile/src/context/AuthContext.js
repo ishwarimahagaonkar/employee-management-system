@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { setUnauthorizedHandler } from "../api/api.js";
 import { getApiErrorMessage } from "../utils/apiError.js";
 import { forget, identify } from "../services/crashReporter";
+import { start as startSync, stop as stopSync } from "../services/syncEngine";
 
 export const AuthContext = createContext();
 
@@ -28,6 +29,25 @@ export const AuthProvider = ({ children }) => {
       forget();
     }
   }, [user]);
+
+  // The offline queue only drains while somebody is signed in -- every queued
+  // request needs a token, and draining without one would burn attempts on
+  // guaranteed 401s.
+  //
+  // Driven off `token` rather than `user` because the token is what the
+  // requests actually carry. Nothing is cleared on sign-out: a punch queued
+  // before a session expired is still a real punch, and the employee will log
+  // back in on the same device. It is dropped only if it goes stale, which the
+  // server's same-day rule decides.
+  useEffect(() => {
+    if (token) {
+      startSync();
+    } else {
+      stopSync();
+    }
+
+    return stopSync;
+  }, [token]);
 
   // The server can reject a stored token at any time (account deactivated, or
   // a logout elsewhere invalidated it). Drop straight to the login screen

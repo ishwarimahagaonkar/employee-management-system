@@ -15,6 +15,7 @@ import api from "../../api/api.js";
 import ErrorState from "../../components/ErrorState";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { AuthContext } from "../../context/AuthContext";
+import { useActiveSite } from "../../context/SiteContext";
 
 import SiteListItem from "./components/SiteListItem";
 import SiteFormModal from "./components/SiteFormModal";
@@ -26,9 +27,14 @@ import SupervisorPickerModal from "./components/SupervisorPickerModal";
 // The API applies the same scoping again, so this only decides what to render.
 export default function SitesScreen({ navigation }) {
   const { user } = useContext(AuthContext);
+  const { refreshSites } = useActiveSite();
 
   const isSupervisor = user?.role === "supervisor";
   const canReassign = user?.role === "admin" || user?.role === "manager";
+
+  // Mirrors site:create in backend/src/config/roles.js. Anyone who runs work
+  // can open a site; only admin and manager can reassign its supervisor.
+  const canCreate = ["admin", "manager", "supervisor"].includes(user?.role);
 
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +91,7 @@ export default function SitesScreen({ navigation }) {
 
       setFormVisible(false);
       await fetchSites();
+      await refreshSites();
       return null;
     } catch (err) {
       return getApiErrorMessage(err);
@@ -96,6 +103,7 @@ export default function SitesScreen({ navigation }) {
       await api.patch(`/sites/${reassigningSite._id}/supervisor`, { supervisorId });
       setReassigningSite(null);
       await fetchSites();
+      await refreshSites();
       return null;
     } catch (err) {
       return getApiErrorMessage(err);
@@ -122,9 +130,10 @@ export default function SitesScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isSupervisor ? "My Sites" : "Sites"}</Text>
 
-        {/* Only supervisors create sites; the API rejects anyone else, so the
-            button would be a dead end for admins and managers. */}
-        {isSupervisor ? (
+        {/* Admin, manager and supervisor can all open a site. Employees never
+            reach this screen, but the check stays role-based rather than
+            assumed so the button can never outlive the permission. */}
+        {canCreate ? (
           <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
             <Ionicons name="add" size={22} color="#fff" />
           </TouchableOpacity>
