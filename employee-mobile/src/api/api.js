@@ -2,8 +2,24 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// TEMPORARY: pointed at the local backend so the labour rework can be tested
+// before it is deployed. Set USE_LOCAL_API back to false to return to
+// production -- that is the only line that needs changing.
+//
+// The LAN address, not "localhost": on a phone, localhost is the phone itself.
+// Both devices must be on the same Wi-Fi, and the backend already listens on
+// 0.0.0.0:5000 so it accepts connections from the network rather than only
+// from this machine.
+//
+// The __DEV__ guard means a release build can never ship pointing at a laptop,
+// however this flag is left. Android also blocks cleartext http:// in release
+// builds, so the local URL only works in development anyway.
+const USE_LOCAL_API = false; // set to true to use the local backend instead of production
+const LOCAL_API = "http://10.198.167.144:5000/api";
+const PROD_API = "https://api.spereon.codes/api";
+
 const API = axios.create({
-  baseURL: "https://api.spereon.codes/api",
+  baseURL: USE_LOCAL_API && __DEV__ ? LOCAL_API : PROD_API,
   timeout: 15000,
 });
 

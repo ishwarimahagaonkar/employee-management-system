@@ -23,13 +23,27 @@ const formatTime = (isoDate) => {
   });
 };
 
-function PhotoBlock({ label, time, photo, loading }) {
+function PhotoBlock({ label, time, photo, loading, offline, receivedAt }) {
   return (
     <View style={styles.block}>
       <View style={styles.blockHeader}>
         <Text style={styles.blockLabel}>{label}</Text>
         <Text style={styles.blockTime}>{formatTime(time)}</Text>
       </View>
+
+      {/* Shown only when the punch was queued offline. The time above came
+          from the employee's own device, and an admin resolving a dispute
+          should see both that fact and how long the gap was, rather than
+          having to know the system well enough to ask. */}
+      {offline && (
+        <View style={styles.offlineNote}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#92400E" />
+          <Text style={styles.offlineText}>
+            Recorded offline on the employee's device
+            {receivedAt ? ` · reached the server at ${formatTime(receivedAt)}` : ""}
+          </Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.placeholder}>
@@ -102,12 +116,16 @@ export default function AttendancePhotoModal({ visible, employee, record, onClos
               time={record?.punchInTime}
               photo={photos.punchInPhoto}
               loading={loading && record?.hasPunchInPhoto}
+              offline={record?.punchInOffline}
+              receivedAt={record?.punchInReceivedAt}
             />
             <PhotoBlock
               label="Punch Out"
               time={record?.punchOutTime}
               photo={photos.punchOutPhoto}
               loading={loading && record?.hasPunchOutPhoto}
+              offline={record?.punchOutOffline}
+              receivedAt={record?.punchOutReceivedAt}
             />
           </ScrollView>
         </View>
@@ -146,6 +164,26 @@ const styles = StyleSheet.create({
 
   block: {
     marginBottom: 20,
+  },
+
+  // Amber, matching the employee-side banner: this is context, not a problem.
+  // A red treatment would read as "this punch is suspect", which overstates it.
+  offlineNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+
+  offlineText: {
+    flex: 1,
+    fontSize: 11,
+    color: "#92400E",
+    lineHeight: 15,
   },
 
   blockHeader: {

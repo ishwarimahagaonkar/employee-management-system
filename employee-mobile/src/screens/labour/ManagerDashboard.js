@@ -78,6 +78,12 @@ export default function ManagerDashboard({ navigation }) {
   const labour = data?.labour || { present: 0, absent: 0 };
   const pending = data?.pendingRequests || { total: 0, leaves: 0, emergencies: 0 };
 
+  // The API has always returned this and the manager screen dropped it, so the
+  // one role that oversees EVERY site could not see which sites had reported.
+  // A supervisor sees it for their own sites already -- same shape, same
+  // treatment, so the two screens now agree on what "reported" looks like.
+  const todayReport = data?.todayReport || { submitted: 0, expected: 0, complete: false };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -117,6 +123,24 @@ export default function ManagerDashboard({ navigation }) {
                 <Ionicons name="alert-circle" size={18} color="#D97706" />
                 <Text style={styles.bannerText}>
                   {pending.total} request{pending.total === 1 ? "" : "s"} waiting on you
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#D97706" />
+              </TouchableOpacity>
+            )}
+
+            {/* Reporting compliance across every site. Shown only while some
+                site still owes a report -- once they are all in there is
+                nothing to act on and the banner would be noise.
+                styles.banner already carries the amber treatment here, unlike
+                the supervisor screen which splits layout from colour. */}
+            {!todayReport.complete && todayReport.expected > 0 && (
+              <TouchableOpacity
+                style={styles.banner}
+                onPress={() => navigation.navigate("DailyWorkReport")}
+              >
+                <Ionicons name="document-text-outline" size={18} color="#D97706" />
+                <Text style={styles.bannerText}>
+                  {todayReport.submitted} of {todayReport.expected} site reports filed today
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color="#D97706" />
               </TouchableOpacity>

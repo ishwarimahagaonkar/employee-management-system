@@ -64,15 +64,19 @@ const pendingRequests = async (companyId) => {
 
 
 // Labour figures for a set of sites on a date.
+//
+// Everything here is derived from the roster, because labour records no longer
+// carry a site: "total" is how many people were put on these sites for this
+// date, not a company headcount. Counting Labour by siteId (as this used to)
+// would now return zero.
 const labourSummary = async (siteIds, date) => {
-    const siteFilter = { $in: siteIds };
+    const records = await LabourAttendance.find({
+        siteId: { $in: siteIds },
+        date,
+    }).select("marked present punchIn punchOut");
 
-    const [total, records] = await Promise.all([
-        Labour.countDocuments({ siteId: siteFilter, status: "active" }),
-        LabourAttendance.find({ siteId: siteFilter, date }).select("present punchIn punchOut"),
-    ]);
-
-    const present = records.filter((r) => r.present).length;
+    const marked = records.filter((r) => r.marked).length;
+    const present = records.filter((r) => r.marked && r.present).length;
 
     // Marked present, clocked in, but never clocked out -- the supervisor's
     // outstanding work at the end of a shift.
@@ -81,11 +85,13 @@ const labourSummary = async (siteIds, date) => {
     ).length;
 
     return {
-        total,
-        marked: records.length,
+        total: records.length,
+        marked,
         present,
-        absent: records.length - present,
-        unmarked: Math.max(total - records.length, 0),
+        absent: marked - present,
+        // Rostered but not yet said present or absent -- real outstanding work,
+        // rather than the old guess of "labour at the site minus rows written".
+        unmarked: records.length - marked,
         pendingPunchOuts,
     };
 };

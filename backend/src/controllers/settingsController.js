@@ -1,17 +1,11 @@
 const Settings = require("../models/Settings");
+const { getOrCreateCompanySettings } = require("../utils/companySettings");
 
 // Each company has its own settings document (companyId: null covers
 // pre-multi-tenant deployments that never had a company assigned).
-const getOrCreateSettings = async (companyId) => {
-    const scopedCompanyId = companyId ?? null;
-    let settings = await Settings.findOne({ companyId: scopedCompanyId });
-
-    if (!settings) {
-        settings = await Settings.create({ companyId: scopedCompanyId });
-    }
-
-    return settings;
-};
+// Shared with attendanceController: one settings row, created one way, seeded
+// with the company's real name. See utils/companySettings.js.
+const getOrCreateSettings = (companyId) => getOrCreateCompanySettings(companyId);
 
 /**
  * @desc Get organization settings

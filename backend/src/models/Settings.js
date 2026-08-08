@@ -7,17 +7,26 @@ const settingsSchema = new mongoose.Schema(
             ref: "Company",
             default: null,
         },
+        // Seeded from the Company record when settings are first created --
+        // see seedFromCompany() in utils/companySettings.js.
+        //
+        // These used to default to a real company's name and address
+        // ("Obsidian.dev" / "admin@obsidian.dev"). Because settings are created
+        // lazily on first use and nothing filled these in, EVERY company on the
+        // platform displayed that name until an admin happened to edit it. A
+        // default must never be another tenant's data; empty is the only safe
+        // starting value.
         companyName: {
             type: String,
-            default: "Obsidian.dev",
+            default: "",
         },
         industry: {
             type: String,
-            default: "Technology",
+            default: "",
         },
         companyEmail: {
             type: String,
-            default: "admin@obsidian.dev",
+            default: "",
         },
         companyPhone: {
             type: String,
@@ -73,5 +82,21 @@ const settingsSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+// One settings document per company -- enforced by the database.
+//
+// Every controller reads settings with findOne({ companyId }), so a second
+// document for the same company does not fail loudly: it makes findOne return
+// an arbitrary one of the two. An admin changes the geofence or the late
+// cut-off and it appears to work only intermittently, because half the punches
+// read the other row. That is close to undiagnosable from user reports.
+//
+// getOrgSettings() runs on EVERY punch, which gave this the widest concurrency
+// exposure of any path in the system. The callers now upsert atomically; this
+// index is what makes the guarantee real rather than conventional.
+//
+// null is a value to MongoDB, so this also allows exactly one companyId: null
+// document -- the pre-multi-tenant row -- which is the intent.
+settingsSchema.index({ companyId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Settings", settingsSchema);

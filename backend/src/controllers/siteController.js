@@ -43,7 +43,7 @@ const CODE_PATTERN = /^[A-Z0-9_-]{2,20}$/;
 // ==========================
 exports.createSite = async (req, res) => {
     try {
-        const { name, code, location, description } = req.body;
+        const { name, code, location, description, supervisorId } = req.body;
 
         if (!name || !code || !location) {
             return res.status(400).json({
@@ -79,15 +79,50 @@ exports.createSite = async (req, res) => {
             });
         }
 
+        // Who runs the site.
+        //
+        // This used to be `req.user._id` unconditionally, which was right only
+        // for a supervisor creating their own site. Once admins and managers
+        // gained site:create it silently made THEM the site's supervisor --
+        // and because resolveSite() gates a supervisor on
+        // site.supervisorId === user._id, no actual supervisor could then mark
+        // attendance there. The site looked fine and was unusable.
+        //
+        // A supervisor still gets themselves. Admins and managers pass one
+        // explicitly, and may leave it unassigned rather than being made
+        // supervisor of a site they will never visit.
+        let assignedSupervisor = null;
+
+        if (req.user.role === ROLES.SUPERVISOR) {
+            assignedSupervisor = req.user._id;
+        } else if (supervisorId) {
+            // Validated against role AND company: without the company check an
+            // admin could attach another tenant's supervisor to their site by
+            // pasting an id.
+            const candidate = await User.findOne({
+                _id: String(supervisorId),
+                role: ROLES.SUPERVISOR,
+                companyId,
+            })
+                .select("_id")
+                .catch(() => null);
+
+            if (!candidate) {
+                return res.status(400).json({
+                    message: "That supervisor was not found in your company",
+                });
+            }
+
+            assignedSupervisor = candidate._id;
+        }
+
         const site = await Site.create({
             name,
             code,
             location,
             description: description || "",
             companyId,
-            // A supervisor creating a site runs it. Admins and managers can
-            // reassign it afterwards.
-            supervisorId: req.user._id,
+            supervisorId: assignedSupervisor,
             createdBy: req.user._id,
         });
 

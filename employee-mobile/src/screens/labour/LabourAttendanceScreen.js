@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
@@ -14,11 +15,17 @@ import { Ionicons } from "@expo/vector-icons";
 
 import api from "../../api/api.js";
 import ErrorState from "../../components/ErrorState";
+import SiteHeader from "../../components/SiteHeader";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { AuthContext } from "../../context/AuthContext";
+import { useActiveSite } from "../../context/SiteContext";
 
-import AttendanceRow from "./components/AttendanceRow";
-import SiteChipSelector from "./components/SiteChipSelector";
+import AttendanceRow, { ROW_HEIGHT } from "./components/AttendanceRow";
+import RosterPickerModal from "./components/RosterPickerModal";
+
+// Row height plus its marginBottom, so the list can compute offsets without
+// measuring every row.
+const ROW_STRIDE = ROW_HEIGHT + 6;
 
 // Dates are Asia/Kolkata calendar days, matching the server.
 const dateStr = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -58,32 +65,30 @@ const computeHours = (punchIn, punchOut) => {
 
 export default function LabourAttendanceScreen({ navigation }) {
   const { user } = useContext(AuthContext);
-  const canMark = user?.role === "admin" || user?.role === "supervisor";
+  // Mirrors labour:attendance in backend/src/config/roles.js -- supervisor
+  // only. Admin was removed deliberately, so there is no longer anyone who can
+  // correct a past day once the supervisor's edit window has closed.
+  const canMark = user?.role === "supervisor";
 
-  const [sites, setSites] = useState([]);
-  const [selectedSiteId, setSelectedSiteId] = useState(null);
+  // Which site is being worked on is session state, not screen state -- see
+  // SiteContext. Switching sites here carries to the Labour and Daily Report
+  // screens too, and survives navigating away.
+  const {
+    activeSite,
+    activeSiteId,
+    loading: loadingSites,
+    error: sitesError,
+  } = useActiveSite();
+
   const [date, setDate] = useState(todayStr());
   const [rows, setRows] = useState([]);
-  const [loadingSites, setLoadingSites] = useState(true);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [dirty, setDirty] = useState(false);
-
-  const fetchSites = async () => {
-    try {
-      setError(null);
-      const res = await api.get("/sites");
-      const list = res.data.sites || [];
-      setSites(list);
-      if (list.length > 0) setSelectedSiteId((prev) => prev || list[0]._id);
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    } finally {
-      setLoadingSites(false);
-    }
-  };
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const fetchSheet = async (siteId, forDate) => {
     if (!siteId) return;
@@ -105,14 +110,47 @@ export default function LabourAttendanceScreen({ navigation }) {
   };
 
   useEffect(() => {
-    fetchSites();
-  }, []);
+    if (activeSiteId) fetchSheet(activeSiteId, date);
+    else setRows([]);
+  }, [activeSiteId, date]);
 
-  useEffect(() => {
-    if (selectedSiteId) fetchSheet(selectedSiteId, date);
-  }, [selectedSiteId, date]);
+  // Puts people on this site for this date. They arrive unmarked -- present or
+  // absent is a separate decision, made on the sheet below.
+  const addToRoster = async (labourIds) => {
+    try {
+      const res = await api.post("/labour-attendance/roster", {
+        siteId: activeSiteId,
+        date,
+        labourIds,
+      });
 
-  const updateRow = (labourId, patch) => {
+      setPickerOpen(false);
+      setNotice(res.data.message);
+      await fetchSheet(activeSiteId, date);
+      return null;
+    } catch (err) {
+      return getApiErrorMessage(err);
+    }
+  };
+
+  // useCallback with a functional update, so this function keeps the same
+  // identity across renders. AttendanceRow is memoised on it -- a new function
+  // each render would defeat the memo and re-render every visible row.
+  const removeFromRoster = useCallback(async (labourId) => {
+    try {
+      await api.delete("/labour-attendance/roster", {
+        data: { siteId: activeSiteId, date, labourId },
+      });
+
+      await fetchSheet(activeSiteId, date);
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    }
+  }, [activeSiteId, date]);
+
+  // Stable identity (no deps): every row is memoised on this, so recreating it
+  // per render would re-render the whole visible list on each keystroke.
+  const updateRow = useCallback((labourId, patch) => {
     setDirty(true);
     setNotice(null);
 
@@ -121,11 +159,16 @@ export default function LabourAttendanceScreen({ navigation }) {
         if (String(row.labour._id) !== String(labourId)) return row;
 
         const next = { ...row, ...patch };
-        next.workingHours = next.present ? computeHours(next.punchIn, next.punchOut) : 0;
+
+        // Presence mirrors the server's rule exactly: both punches recorded.
+        // Deriving it here rather than storing a separate flag is what keeps
+        // the on-screen count from drifting away from what gets saved.
+        next.present = !!next.punchIn && !!next.punchOut;
+        next.workingHours = computeHours(next.punchIn, next.punchOut);
         return next;
       })
     );
-  };
+  }, []);
 
   const save = async () => {
     if (saving) return;
@@ -136,22 +179,23 @@ export default function LabourAttendanceScreen({ navigation }) {
 
     try {
       const res = await api.post("/labour-attendance", {
-        siteId: selectedSiteId,
+        siteId: activeSiteId,
         date,
         // Locked rows are left out entirely -- the server would ignore them
         // anyway, and sending them just invites a confusing "skipped" reply.
         entries: rows
           .filter((row) => row.editable)
+          // `present` is deliberately not sent: the server derives it from the
+          // punches, so a client that disagreed could not corrupt the counts.
           .map((row) => ({
             labourId: row.labour._id,
-            present: row.present,
-            punchIn: row.present && row.punchIn ? row.punchIn : null,
-            punchOut: row.present && row.punchOut ? row.punchOut : null,
+            punchIn: row.punchIn || null,
+            punchOut: row.punchOut || null,
           })),
       });
 
       setNotice(res.data.message);
-      await fetchSheet(selectedSiteId, date);
+      await fetchSheet(activeSiteId, date);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -160,9 +204,33 @@ export default function LabourAttendanceScreen({ navigation }) {
   };
 
   const isToday = date === todayStr();
-  const presentCount = rows.filter((r) => r.present).length;
+  // Counted on the in-time, matching labourCountsFor on the server: turning up
+  // is what "present" means for the day's report. `completeCount` is the
+  // narrower "full shift recorded" figure, shown so a supervisor can see who
+  // still needs punching out before they leave.
+  const presentCount = rows.filter((r) => !!r.punchIn).length;
+  const completeCount = rows.filter((r) => !!r.punchIn && !!r.punchOut).length;
+  const unmarkedCount = rows.filter((r) => !r.punchIn).length;
   const editableCount = rows.filter((r) => r.editable).length;
-  const noSites = !loadingSites && sites.length === 0;
+  const noSite = !loadingSites && !activeSiteId;
+
+  // Searching filters the roster in place. Counts above stay whole-roster on
+  // purpose: "12 present of 40" must not change just because you searched.
+  const visibleRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+
+    return rows.filter((r) =>
+      `${r.labour.fullName} ${r.labour.labourId}`.toLowerCase().includes(term)
+    );
+  }, [rows, search]);
+
+  // Rows are a fixed height, so offsets can be computed instead of measured --
+  // this is what keeps a long crew list scrolling smoothly.
+  const getItemLayout = useCallback(
+    (_, index) => ({ length: ROW_STRIDE, offset: ROW_STRIDE * index, index }),
+    []
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -171,12 +239,20 @@ export default function LabourAttendanceScreen({ navigation }) {
           <Ionicons name="menu" size={24} color="#1E1B4B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Labour Attendance</Text>
-        <View style={styles.headerSpacer} />
+
+        {/* Adding needs a site and the right to mark. */}
+        {canMark && activeSiteId ? (
+          <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
+            <Ionicons name="add" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       {loadingSites ? (
         <ActivityIndicator size="large" color="#112250" style={styles.loader} />
-      ) : noSites ? (
+      ) : noSite ? (
         <Text style={styles.emptyText}>
           {user?.role === "supervisor"
             ? "No sites assigned to you yet."
@@ -187,32 +263,35 @@ export default function LabourAttendanceScreen({ navigation }) {
           style={styles.flex}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <SiteChipSelector
-            sites={sites}
-            selectedId={selectedSiteId}
-            onSelect={setSelectedSiteId}
+          {/* Site and date share one bar. They used to be two stacked rows,
+              which cost ~50px of a screen whose whole job is showing a list. */}
+          <SiteHeader
+            onSiteChange={(siteId) => fetchSheet(siteId, date)}
+            right={
+              <View style={styles.dateStepper}>
+                <TouchableOpacity
+                  style={styles.dateArrow}
+                  onPress={() => setDate(shiftDate(date, -1))}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Ionicons name="chevron-back" size={17} color="#112250" />
+                </TouchableOpacity>
+
+                <Text style={styles.dateText}>{prettyDate(date)}</Text>
+
+                {/* Attendance can't be recorded ahead of time, so today is the
+                    end of the road going forward. */}
+                <TouchableOpacity
+                  style={styles.dateArrow}
+                  onPress={() => setDate(shiftDate(date, 1))}
+                  disabled={isToday}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Ionicons name="chevron-forward" size={17} color={isToday ? "#C4C9D2" : "#112250"} />
+                </TouchableOpacity>
+              </View>
+            }
           />
-
-          <View style={styles.dateBar}>
-            <TouchableOpacity
-              style={styles.dateArrow}
-              onPress={() => setDate(shiftDate(date, -1))}
-            >
-              <Ionicons name="chevron-back" size={20} color="#112250" />
-            </TouchableOpacity>
-
-            <Text style={styles.dateText}>{prettyDate(date)}</Text>
-
-            {/* Attendance can't be recorded ahead of time, so today is the end
-                of the road going forward. */}
-            <TouchableOpacity
-              style={[styles.dateArrow, isToday && styles.dateArrowDisabled]}
-              onPress={() => setDate(shiftDate(date, 1))}
-              disabled={isToday}
-            >
-              <Ionicons name="chevron-forward" size={20} color={isToday ? "#D1D5DB" : "#112250"} />
-            </TouchableOpacity>
-          </View>
 
           {!!notice && (
             <View style={styles.noticeBanner}>
@@ -224,27 +303,72 @@ export default function LabourAttendanceScreen({ navigation }) {
           {loadingSheet ? (
             <ActivityIndicator size="large" color="#112250" style={styles.loader} />
           ) : error ? (
-            <ErrorState message={error} onRetry={() => fetchSheet(selectedSiteId, date)} />
+            <ErrorState message={error} onRetry={() => fetchSheet(activeSiteId, date)} />
           ) : (
             <>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryText}>
                   {presentCount} present of {rows.length}
+                  {presentCount > completeCount
+                    ? ` · ${presentCount - completeCount} still on site`
+                    : ""}
+                  {unmarkedCount > 0 ? ` · ${unmarkedCount} absent` : ""}
                 </Text>
+                <Text style={styles.clockHint}>punch in, then out</Text>
               </View>
 
+              {/* Search appears only when the roster is long enough to need
+                  it -- on a crew of six it would just cost a row of height. */}
+              {rows.length > 8 && (
+                <View style={styles.searchBox}>
+                  <Ionicons name="search-outline" size={16} color="#9CA3AF" />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Find in this roster"
+                    placeholderTextColor="#9CA3AF"
+                    value={search}
+                    onChangeText={setSearch}
+                    autoCorrect={false}
+                  />
+                  {!!search && (
+                    <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color="#C4C9D2" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
               <FlatList
-                data={rows}
+                data={visibleRows}
                 keyExtractor={(item) => item.labour._id}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                getItemLayout={getItemLayout}
+                // Tuned for a long crew: render enough to fill the screen,
+                // then extend in small batches rather than one large stall.
+                initialNumToRender={14}
+                maxToRenderPerBatch={10}
+                windowSize={7}
+                removeClippedSubviews={Platform.OS === "android"}
                 ListEmptyComponent={
+                  // An empty roster is normal at the start of a day, not an
+                  // error -- say what to do about it.
                   <Text style={styles.emptyText}>
-                    No active labour at this site. Add labour before marking attendance.
+                    {search
+                      ? "Nobody on this roster matches that."
+                      : canMark
+                        ? `Nobody is on ${activeSite?.name || "this site"} for ${prettyDate(date).toLowerCase()} yet.\n\nTap + to choose who is working today.`
+                        : "Nobody has been added to this site for this day."}
                   </Text>
                 }
-                renderItem={({ item }) => <AttendanceRow row={item} onChange={updateRow} />}
+                renderItem={({ item }) => (
+                  <AttendanceRow
+                    row={item}
+                    onChange={updateRow}
+                    onRemove={canMark ? removeFromRoster : undefined}
+                  />
+                )}
               />
 
               {canMark && rows.length > 0 && editableCount > 0 && (
@@ -272,6 +396,14 @@ export default function LabourAttendanceScreen({ navigation }) {
           )}
         </KeyboardAvoidingView>
       )}
+
+      <RosterPickerModal
+        visible={pickerOpen}
+        siteName={activeSite?.name}
+        alreadyOn={rows.map((r) => r.labour._id)}
+        onClose={() => setPickerOpen(false)}
+        onAdd={addToRoster}
+      />
     </SafeAreaView>
   );
 }
@@ -290,9 +422,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
 
   headerTitle: {
@@ -302,37 +434,32 @@ const styles = StyleSheet.create({
   },
 
   headerSpacer: {
-    width: 24,
+    width: 36,
   },
 
-  dateBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-
-  dateArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#112250",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  dateArrowDisabled: {
-    opacity: 0.5,
+  dateStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+
+  dateArrow: {
+    paddingHorizontal: 2,
   },
 
   dateText: {
-    fontSize: 14,
+    minWidth: 62,
+    textAlign: "center",
+    fontSize: 12,
     fontWeight: "700",
     color: "#1E1B4B",
   },
@@ -341,10 +468,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: "#DCFCE7",
     borderWidth: 1,
@@ -359,14 +486,43 @@ const styles = StyleSheet.create({
   },
 
   summaryRow: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
 
   summaryText: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#6B7280",
+  },
+
+  clockHint: {
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 36,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#1E1B4B",
+    padding: 0,
   },
 
   loader: {
@@ -374,8 +530,8 @@ const styles = StyleSheet.create({
   },
 
   list: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
 
   emptyText: {
@@ -387,9 +543,9 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     backgroundColor: "#F4F6F8",
@@ -397,8 +553,8 @@ const styles = StyleSheet.create({
 
   saveBtn: {
     backgroundColor: "#112250",
-    borderRadius: 16,
-    paddingVertical: 15,
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: "center",
   },
 

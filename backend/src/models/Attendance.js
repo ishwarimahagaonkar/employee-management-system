@@ -18,8 +18,39 @@ const attendanceSchema = new mongoose.Schema({
         required: true
     },
 
+    // The real punch times. When a punch is queued offline these hold when the
+    // employee actually punched, NOT when the server received it -- see
+    // utils/capturedAt.js. Payroll, late calculation and working hours all read
+    // these, so they must stay the authoritative moment.
     punchInTime: Date,
     punchOutTime: Date,
+
+    // When the server actually received each punch. Equal to the punch time on
+    // a live request; later when it came off the offline queue. Kept so a
+    // disputed record can be read honestly: "punched 09:04, arrived 14:20" is
+    // a fact an admin should be able to see rather than infer.
+    punchInReceivedAt: {
+        type: Date,
+        default: null
+    },
+
+    punchOutReceivedAt: {
+        type: Date,
+        default: null
+    },
+
+    // True when that punch spent a meaningful time in the offline queue.
+    // Surfaced to admins because a device-asserted time is weaker evidence
+    // than a server-observed one, and the pattern is worth being able to see.
+    punchInOffline: {
+        type: Boolean,
+        default: false
+    },
+
+    punchOutOffline: {
+        type: Boolean,
+        default: false
+    },
 
     punchInLocation: {
         lat: Number,
@@ -101,10 +132,25 @@ const attendanceSchema = new mongoose.Schema({
 
 });
 
-// Main per-user lookup (findOne by userId+date on every punch / today check).
-// Non-unique to stay safe against any legacy duplicate rows; the punch-in
-// controller already enforces one record per user per day.
-attendanceSchema.index({ userId: 1, date: 1 });
+// One attendance record per user per day -- enforced by the DATABASE, not just
+// by the controller's check.
+//
+// This index used to be non-unique, leaving the guarantee to a findOne/create
+// pair in punchIn(). Those two statements are not atomic, so anything that got
+// between them produced two rows for the same day. The realistic trigger was
+// never a double tap: it was the 60-second punch request timing out on a weak
+// signal, the employee tapping again, and the first request landing after the
+// second. punchOut() then updated whichever row findOne happened to return, so
+// an employee could read as punched-in-never-out and payroll would total the
+// wrong record.
+//
+// Same guarantee LabourAttendance and DailyWorkReport have always had.
+//
+// Adding this to an existing deployment needs the old non-unique index dropped
+// first -- Mongoose cannot convert one in place and will log an
+// IndexOptionsConflict and carry on unprotected. scripts/fixAttendanceDuplicates.js
+// does the drop, and checks for pre-existing duplicates before it tries.
+attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
 // Admin views list a whole company's attendance by date.
 attendanceSchema.index({ companyId: 1, date: -1 });
 

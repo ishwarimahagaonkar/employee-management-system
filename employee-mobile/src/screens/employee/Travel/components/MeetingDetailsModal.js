@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import KeyboardAwareScrollView from "../../../../components/KeyboardAwareScrollView";
+
 const emptyForm = { customerName: "", meetingStartTime: "", meetingEndTime: "", notes: "" };
 
 export default function MeetingDetailsModal({ visible, loading, onClose, onSubmit }) {
@@ -95,13 +97,14 @@ export default function MeetingDetailsModal({ visible, loading, onClose, onSubmi
             Add details about the meeting for your last trip.
           </Text>
 
-          {/* keyboardShouldPersistTaps: without it the first tap on Save while the
-              keyboard is open only dismisses the keyboard, so saving took two taps. */}
-          <ScrollView
-            ref={scrollRef}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+          {/* KeyboardAwareScrollView pads the content by the keyboard's real
+              height. scrollToField below could already move to a focused input,
+              but with no padding there was nothing to scroll INTO -- the
+              content ended at the last field, so the bottom ones stayed under
+              the keyboard however far it tried to scroll.
+              (It also sets keyboardShouldPersistTaps, without which the first
+              tap on Save merely dismisses the keyboard.) */}
+          <KeyboardAwareScrollView ref={scrollRef}>
             <View onLayout={rememberOffset("customerName")}>
               <Text style={styles.label}>Customer Name</Text>
               <TextInput
@@ -161,7 +164,7 @@ export default function MeetingDetailsModal({ visible, loading, onClose, onSubmi
             >
               <Text style={styles.submitText}>{loading ? "Saving..." : "Save Meeting Details"}</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>

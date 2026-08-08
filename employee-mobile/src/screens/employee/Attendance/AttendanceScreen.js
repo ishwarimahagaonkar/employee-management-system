@@ -1,5 +1,5 @@
 // AttendanceScreen.js
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import styles from "./styles/AttendanceStyles.js";
 
 import {
@@ -23,6 +23,8 @@ import MonthlyAttendance from "./MonthlyAttendance.js";
 import EmergencyRequestModal from "./EmergencyRequestModal.js";
 import ErrorState from "../../../components/ErrorState.js";
 import { getApiErrorMessage } from "../../../utils/apiError.js";
+import { enqueue, list as listQueued, KINDS } from "../../../services/offlineQueue";
+import { subscribe as onSync, syncIfPending } from "../../../services/syncEngine";
 
 export default function AttendanceScreen() {
   const [todayAttendance, setTodayAttendance] = useState(null);
@@ -44,10 +46,33 @@ export default function AttendanceScreen() {
   const cameraReadyRef = useRef(false);
   const navigation = useNavigation();
 
+  // Punches waiting in the offline queue. Without this the button would still
+  // read "Punch In" after a punch was queued, and the employee would tap again
+  // -- queueing the same punch twice. The server would refuse the duplicate,
+  // but they would have had no way of knowing the first one worked.
+  const [queuedKinds, setQueuedKinds] = useState([]);
+
+  const refreshPending = useCallback(async () => {
+    try {
+      const entries = await listQueued();
+      setQueuedKinds(entries.map((e) => e.kind));
+    } catch (err) {
+      setQueuedKinds([]);
+    }
+  }, []);
+
+  const punchInQueued = queuedKinds.includes(KINDS.PUNCH_IN);
+  const punchOutQueued = queuedKinds.includes(KINDS.PUNCH_OUT);
+  const pendingCount = queuedKinds.length;
+
+  // A queued punch counts as done for the purposes of what to offer next: the
+  // employee has punched, it simply has not reached the server yet.
   const hasPunchedIn =
-    Boolean(todayAttendance?.punchInTime && !todayAttendance?.punchOutTime);
+    Boolean(todayAttendance?.punchInTime && !todayAttendance?.punchOutTime) ||
+    (punchInQueued && !punchOutQueued);
   const hasPunchedOut =
-    Boolean(todayAttendance?.punchInTime && todayAttendance?.punchOutTime);
+    Boolean(todayAttendance?.punchInTime && todayAttendance?.punchOutTime) ||
+    punchOutQueued;
 
   // A site punch-out is unlocked once the employee has submitted the meeting
   // record for one of today's completed trips.
@@ -107,6 +132,33 @@ export default function AttendanceScreen() {
     setLoading(true);
     fetchAttendanceData();
   };
+
+  // Keeps the pending count honest while the queue drains in the background.
+  // Once a punch is delivered the server is the source of truth again, so the
+  // attendance data is refetched rather than inferred from the queue.
+  useEffect(() => {
+    refreshPending();
+
+    const unsubscribe = onSync((summary) => {
+      refreshPending();
+
+      if (summary?.sent > 0) {
+        fetchAttendanceData();
+      }
+
+      // A punch the server refused is gone for good, and the employee has been
+      // walking around believing it was recorded. Say so plainly.
+      for (const rejected of summary?.rejections || []) {
+        alert(`A saved punch could not be submitted: ${rejected.message}`);
+      }
+    });
+
+    // Anything queued from a previous session goes out as soon as this screen
+    // opens, rather than waiting for the next interval tick.
+    syncIfPending();
+
+    return unsubscribe;
+  }, [refreshPending]);
 
   useEffect(() => {
     fetchAttendanceData();
@@ -265,9 +317,36 @@ export default function AttendanceScreen() {
         setPendingLocation(capturedLocation);
         setPendingPhoto(photo);
         setEmergencyModalVisible(true);
-      } else if (err.code === "ECONNABORTED" || err.message === "Network Error") {
-        // The server may have recorded the punch even though the response
-        // never arrived — refresh so the button state reflects reality.
+      } else if (!err.response && (type === "punch-in" || type === "punch-out")) {
+        // No response at all: the request never reached the server, or the
+        // reply was lost. Either way the punch is real and must not be thrown
+        // away — queue it and let syncEngine deliver it when signal returns.
+        //
+        // The stored capturedAt is what keeps this honest: the server records
+        // when the employee actually punched, not when it finally arrived.
+        //
+        // A refresh still runs first, because the server may in fact have
+        // saved it and only the response went missing. If it did, the queued
+        // copy is answered with "Already punched in today" on replay, which
+        // the sync engine treats as delivered rather than as an error.
+        const kind = type === "punch-in" ? KINDS.PUNCH_IN : KINDS.PUNCH_OUT;
+
+        await enqueue({
+          kind,
+          payload: capturedLocation,
+          photoBase64: photo?.base64 || null,
+        });
+
+        await refreshPending();
+        await fetchAttendanceData();
+
+        alert(
+          "No internet connection. Your punch has been saved on this device and will be submitted automatically once you are back online."
+        );
+      } else if (!err.response) {
+        // A site punch-out is tied to a specific trip's meeting record, so it
+        // is not one of the queueable kinds -- replaying it later could attach
+        // to the wrong trip. It stays a live-only action.
         alert(
           "Network problem while submitting. Please check your internet connection and try again."
         );
@@ -344,6 +423,20 @@ export default function AttendanceScreen() {
             )}
           </View>
 
+          {/* Shown only while something is actually waiting. An employee who
+              punched with no signal needs to know the punch is safe, not just
+              that the request failed. */}
+          {pendingCount > 0 && (
+            <View style={styles.pendingBanner}>
+              <Ionicons name="cloud-offline-outline" size={16} color="#92400E" />
+              <Text style={styles.pendingText}>
+                {pendingCount === 1
+                  ? "1 punch saved on this device, waiting to be submitted"
+                  : `${pendingCount} punches saved on this device, waiting to be submitted`}
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={styles.punchButton}
             disabled={hasPunchedOut || punchLoading}
@@ -360,10 +453,14 @@ export default function AttendanceScreen() {
               </View>
             ) : (
               <Text style={styles.punchText}>
-                {hasPunchedIn
-                  ? "Punch Out"
-                  : hasPunchedOut
-                  ? "Attendance Completed"
+                {hasPunchedOut
+                  ? punchOutQueued
+                    ? "Punched Out (waiting to sync)"
+                    : "Attendance Completed"
+                  : hasPunchedIn
+                  ? punchInQueued
+                    ? "Punch Out (punch-in waiting to sync)"
+                    : "Punch Out"
                   : "Punch In"}
               </Text>
             )}

@@ -4,7 +4,7 @@ import RoleDrawerNavigator from "./RoleDrawerNavigator";
 import { withErrorBoundary } from "../components/ErrorBoundary";
 
 import ManagerDashboard from "../screens/labour/ManagerDashboard";
-import BottomTabNavigator from "../screens/employee/BottomTabNavigator";
+import MyWorkStack from "./MyWorkStack";
 import EmployeesScreen from "../screens/admin/Employees/EmployeesScreen";
 import AttendanceScreen from "../screens/admin/Attendance/AttendanceScreen";
 import LeaveScreen from "../screens/admin/Leave/LeaveScreen";
@@ -28,7 +28,10 @@ import { FEATURES } from "../config/features";
 // supervisor who was actually on site.
 
 const DashboardRoute = withErrorBoundary(ManagerDashboard, "Dashboard");
-const MyWorkRoute = withErrorBoundary(BottomTabNavigator, "My Work");
+// MyWorkStack rather than BottomTabNavigator directly: the bare tab
+// navigator had no MonthlyAttendance route (so the Attendance History arrow
+// did nothing) and no stack to go back through. See MyWorkStack.js.
+const MyWorkRoute = withErrorBoundary(MyWorkStack, "My Work");
 const EmployeesRoute = withErrorBoundary(EmployeesScreen, "Employees");
 const AttendanceRoute = withErrorBoundary(AttendanceScreen, "Attendance");
 const LeaveRoute = withErrorBoundary(LeaveScreen, "Leave");

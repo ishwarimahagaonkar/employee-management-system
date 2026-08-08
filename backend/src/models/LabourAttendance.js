@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 // One attendance record per labourer per day.
 //
+// This row is also the SITE ASSIGNMENT. Labour records carry no site, so the
+// only statement that "Rahul worked Site B on 2 Aug" is this document. Adding
+// someone to a site's roster for a day creates the row; marking them fills it
+// in. Site history is therefore append-only and can never be rewritten by
+// editing a labour record.
+//
 // Separate from the Attendance collection on purpose: that one's userId is a
 // required ref to User, and labour are not users. Keeping them apart also
 // means nothing here can disturb the payroll path that reads Attendance.
@@ -44,6 +50,15 @@ const labourAttendanceSchema = new mongoose.Schema(
         date: {
             type: String,
             required: true,
+        },
+
+        // False while the person is on the roster but the supervisor hasn't
+        // said present or absent yet. Without this, rostering someone would
+        // immediately report them as absent, and a dashboard could never show
+        // an honest "still to mark" figure.
+        marked: {
+            type: Boolean,
+            default: false,
         },
 
         present: {
@@ -114,14 +129,22 @@ labourAttendanceSchema.statics.computeHours = function (punchIn, punchOut) {
 //
 // No `next` parameter: Mongoose 9 treats document middleware as promise-based.
 labourAttendanceSchema.pre("validate", function () {
-    if (!this.present) {
-        this.punchIn = null;
-        this.punchOut = null;
-        this.workingHours = 0;
-        return;
-    }
+    // `present` is derived here rather than trusted, so the flag can never
+    // disagree with the times beside it no matter which path wrote the row.
+    // A shift counts as attended only when BOTH punches are recorded.
+    const complete =
+        this.constructor.isValidTime(this.punchIn) &&
+        this.constructor.isValidTime(this.punchOut);
 
-    this.workingHours = this.constructor.computeHours(this.punchIn, this.punchOut);
+    this.present = complete;
+    this.workingHours = complete
+        ? this.constructor.computeHours(this.punchIn, this.punchOut)
+        : 0;
+
+    // Deliberately NOT clearing punchIn when the shift is incomplete. The
+    // previous version blanked both times whenever `present` was false, which
+    // under the punch-in/punch-out flow would wipe the in-time of everyone
+    // still on site -- they are false only because they haven't left yet.
 });
 
 // One record per labourer per day -- the guarantee behind "mark today's sheet"

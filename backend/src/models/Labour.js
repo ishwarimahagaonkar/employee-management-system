@@ -1,11 +1,18 @@
 const mongoose = require("mongoose");
 
-// A labourer working at a site.
+// A labourer on the company's master list.
 //
 // Labour is NOT a system user: there is no email, no password and no role, and
 // these records never authenticate. They exist purely so attendance can be
 // tracked against them. That is why this is its own collection rather than
 // another role on User.
+//
+// There is deliberately NO siteId here. A labourer belongs to the company, not
+// to a site: the site they worked on a given day is recorded on that day's
+// LabourAttendance row instead. That is what lets the same person work Site A
+// on Monday and Site B on Tuesday without ever duplicating this record, and it
+// means site history is derived from attendance rather than from overwriting a
+// field (which would silently rewrite the past).
 //
 // No government ID is stored. Aadhaar was dropped from the design deliberately
 // -- nothing here needs it, and not holding it is the safer default.
@@ -16,12 +23,6 @@ const labourSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Company",
             default: null,
-        },
-
-        siteId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Site",
-            required: true,
         },
 
         // Typed in by the supervisor and unique within the company.
@@ -142,7 +143,7 @@ labourSchema.index(
     { unique: true, partialFilterExpression: { mobileKey: { $type: "string" } } }
 );
 
-// Every supervisor screen lists labour for one site.
-labourSchema.index({ companyId: 1, siteId: 1, status: 1 });
+// The master list is browsed and searched company-wide, not per site.
+labourSchema.index({ companyId: 1, status: 1 });
 
 module.exports = mongoose.model("Labour", labourSchema);

@@ -38,6 +38,13 @@ export default function EmployeeAttendanceRow({ employee, record, onPress }) {
   // The list no longer carries the images themselves, just these flags.
   const hasPhoto = !!(record?.hasPunchInPhoto || record?.hasPunchOutPhoto);
 
+  // Either punch having been queued offline is worth showing. The time beside
+  // it came from the employee's own device rather than being observed by the
+  // server, which is weaker evidence -- not wrong, but an admin resolving a
+  // dispute should be able to see the difference rather than having to know
+  // the system well enough to ask.
+  const syncedOffline = !!(record?.punchInOffline || record?.punchOutOffline);
+
   return (
     <TouchableOpacity
       style={styles.card}
@@ -57,6 +64,14 @@ export default function EmployeeAttendanceRow({ employee, record, onPress }) {
 
       <View style={styles.right}>
         <View style={styles.pillRow}>
+          {syncedOffline && (
+            <Ionicons
+              name="cloud-offline-outline"
+              size={14}
+              color="#D97706"
+              style={styles.cameraIcon}
+            />
+          )}
           {hasPhoto && <Ionicons name="camera" size={14} color="#9CA3AF" style={styles.cameraIcon} />}
           <View style={[styles.statusPill, { backgroundColor: style.bg }]}>
             <Text style={[styles.statusText, { color: style.text }]}>{style.label}</Text>

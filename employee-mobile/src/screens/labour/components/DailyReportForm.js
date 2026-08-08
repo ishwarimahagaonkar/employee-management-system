@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import TimeField from "../../../components/TimeField";
+
 const emptyForm = {
   startTime: "",
   endTime: "",
@@ -33,14 +35,6 @@ const SECTIONS = [
   { key: "safetyIncidents", label: "Safety Incidents", placeholder: "Leave blank if none" },
   { key: "additionalNotes", label: "Additional Notes", placeholder: "Anything else worth recording" },
 ];
-
-// Types "0900" as "09:00" so the colon key is never needed.
-const formatTimeInput = (raw, previous) => {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
-  if (raw.length < previous.length && raw.endsWith(":")) return raw.slice(0, -1);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-};
 
 export default function DailyReportForm({
   report,
@@ -174,36 +168,41 @@ export default function DailyReportForm({
           </Text>
         )}
 
+        {/* Clock pickers rather than typed text. The stored value is still a
+            plain "HH:MM" string, so validate() below and the server's working-
+            hours calculation are untouched -- only the input method changed.
+            A locked report shows the times read-only rather than a dead field. */}
         <View style={styles.timeRow} onLayout={rememberOffset("times")}>
-          <View style={styles.timeCol}>
-            <Text style={styles.label}>Start Time</Text>
-            <TextInput
-              style={styles.input}
-              value={form.startTime}
-              onChangeText={(v) => update("startTime")(formatTimeInput(v, form.startTime))}
-              onFocus={handleFocus("times")}
-              placeholder="09:00"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="number-pad"
-              maxLength={5}
-              editable={editable}
-            />
-          </View>
+          {editable ? (
+            <>
+              <TimeField
+                label="Start Time"
+                value={form.startTime}
+                onChange={update("startTime")}
+                defaultHour={9}
+                style={styles.timeCol}
+              />
 
-          <View style={styles.timeCol}>
-            <Text style={styles.label}>End Time</Text>
-            <TextInput
-              style={styles.input}
-              value={form.endTime}
-              onChangeText={(v) => update("endTime")(formatTimeInput(v, form.endTime))}
-              onFocus={handleFocus("times")}
-              placeholder="18:00"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="number-pad"
-              maxLength={5}
-              editable={editable}
-            />
-          </View>
+              <TimeField
+                label="End Time"
+                value={form.endTime}
+                onChange={update("endTime")}
+                defaultHour={18}
+                style={styles.timeCol}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.timeCol}>
+                <Text style={styles.label}>Start Time</Text>
+                <Text style={styles.readOnlyValue}>{form.startTime || "--:--"}</Text>
+              </View>
+              <View style={styles.timeCol}>
+                <Text style={styles.label}>End Time</Text>
+                <Text style={styles.readOnlyValue}>{form.endTime || "--:--"}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         <View onLayout={rememberOffset("workCompleted")}>
@@ -376,6 +375,15 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: "row",
     gap: 12,
+  },
+
+  // Shown instead of a picker on a settled report: a disabled field reads as
+  // broken, whereas plain text reads as a record.
+  readOnlyValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+    paddingVertical: 12,
   },
 
   timeCol: {

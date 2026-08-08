@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import DateField from "../../../../components/DateField";
+
 const PLANS = ["Standard", "Premium"];
 const STATUSES = ["trial", "active", "suspended", "expired"];
 
@@ -98,22 +100,23 @@ export default function SubscriptionEditModal({ visible, subscription, onClose, 
               ))}
             </View>
 
-            <Text style={styles.label}>Start Date</Text>
-            <TextInput
-              style={styles.input}
+            {/* Calendars. Subscription dates are the one place a typo is
+                expensive -- a mistyped end date either cuts a paying company
+                off or extends them for free -- and they were free text.
+                minDate on End is the chosen Start, so the period cannot be
+                inverted. No maxDate: a subscription legitimately ends in the
+                future, unlike a report range. */}
+            <DateField
+              label="Start Date"
               value={form.startDate}
-              onChangeText={update("startDate")}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
+              onChange={update("startDate")}
             />
 
-            <Text style={styles.label}>End Date</Text>
-            <TextInput
-              style={styles.input}
+            <DateField
+              label="End Date"
               value={form.endDate}
-              onChangeText={update("endDate")}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
+              onChange={update("endDate")}
+              minDate={form.startDate || undefined}
             />
 
             <Text style={styles.label}>Employee Limit</Text>

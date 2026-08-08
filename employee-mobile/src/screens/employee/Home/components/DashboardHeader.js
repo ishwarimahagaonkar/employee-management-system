@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-
+import { Button } from "react-native";
 import api from "../../../../api/api.js";
 
 const getGreeting = () => {
@@ -35,6 +35,7 @@ export default function DashboardHeader({ name, checkedIn }) {
       mounted = false;
     };
   }, []);
+
 
   return (
     <LinearGradient
@@ -79,6 +80,8 @@ export default function DashboardHeader({ name, checkedIn }) {
           <Ionicons name="time-outline" size={20} color="#fff" />
         </View>
       </View>
+
+  
     </LinearGradient>
   );
 }

@@ -3,7 +3,7 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity } from "react-nativ
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
 import PrimaryButton from "./PrimaryButton";
-import DateField from "./DateField";
+import DateField from "../../../../components/DateField";
 
 export default function LeaveForm({
   leaveType,

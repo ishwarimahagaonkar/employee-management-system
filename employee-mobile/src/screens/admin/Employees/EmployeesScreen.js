@@ -73,30 +73,63 @@ export default function EmployeesScreen({ navigation }) {
   // can't be used while the form is open, since on Android the dialog may sit
   // behind the modal and leave a dimmed sheet that swallows every tap.
   const handleSubmit = async (form) => {
+    // Held until the modal has closed -- see where it is shown below.
+    let confirmation = null;
+
     try {
       if (editingEmployee) {
-        await api.put(`/employees/${editingEmployee._id}`, {
-          empID: form.empID,
-          fullName: form.fullName,
-          department: form.department,
-          designation: form.designation,
-          hourlyRate: form.hourlyRate === "" ? undefined : Number(form.hourlyRate),
-          JoiningDate: form.JoiningDate,
-        });
+        // Three separate requests, because the role and the password each have
+        // their own guarded endpoint -- a profile save must not be able to
+        // smuggle in a promotion or a credential change.
+        //
+        // They are reported on individually. Previously any failure surfaced as
+        // one generic message with no indication of WHICH part failed, so a
+        // password reset that was rejected looked identical to one that
+        // silently did nothing -- and on success nothing said the password had
+        // changed at all.
+        const changedPassword = !!(form.password && form.password.trim());
 
-        // The role travels on its own endpoint: the update above deliberately
-        // ignores a role field so a profile save can't smuggle in a promotion.
-        if (form.role && form.role !== editingEmployee.role) {
-          await api.patch(`/employees/${editingEmployee._id}/role`, {
-            role: form.role,
+        try {
+          await api.put(`/employees/${editingEmployee._id}`, {
+            empID: form.empID,
+            fullName: form.fullName,
+            department: form.department,
+            designation: form.designation,
+            hourlyRate: form.hourlyRate === "" ? undefined : Number(form.hourlyRate),
+            JoiningDate: form.JoiningDate,
           });
+        } catch (err) {
+          return `Profile not saved: ${getApiErrorMessage(err)}`;
         }
 
-        // Optional password reset on edit (only when a new password was entered).
-        if (form.password && form.password.trim()) {
-          await api.patch(`/employees/${editingEmployee._id}/password`, {
-            password: form.password,
-          });
+        if (form.role && form.role !== editingEmployee.role) {
+          try {
+            await api.patch(`/employees/${editingEmployee._id}/role`, {
+              role: form.role,
+            });
+          } catch (err) {
+            return `Profile saved, but the role did not change: ${getApiErrorMessage(err)}`;
+          }
+        }
+
+        if (changedPassword) {
+          try {
+            await api.patch(`/employees/${editingEmployee._id}/password`, {
+              password: form.password,
+            });
+          } catch (err) {
+            // Named explicitly: the profile change above has already been
+            // written, so "failed" on its own would be misleading.
+            return `Profile saved, but the password did NOT change: ${getApiErrorMessage(err)}`;
+          }
+
+          // Confirmed AFTER the modal closes, not here: Alert.alert while the
+          // sheet is open can sit behind it on Android, leaving a dimmed form
+          // that swallows every tap (the reason this screen reports failures
+          // inline instead).
+          confirmation =
+            `Password updated for ${form.fullName}. ` +
+            "They will be signed out of any existing session.";
         }
       } else {
         await api.post("/employees", form);
@@ -104,6 +137,12 @@ export default function EmployeesScreen({ navigation }) {
 
       setModalVisible(false);
       fetchEmployees();
+
+      // A password reset is otherwise invisible: the modal just closes, exactly
+      // as it does when nothing was changed. Saying so is what tells an admin
+      // it actually happened.
+      if (confirmation) Alert.alert("Saved", confirmation);
+
       return null;
     } catch (err) {
       return getApiErrorMessage(err);

@@ -16,6 +16,7 @@ import { AuthContext } from "../../context/AuthContext";
 import api from "../../api/api.js";
 import DashboardStatCard from "../admin/components/DashboardStatCard";
 import ErrorState from "../../components/ErrorState";
+import SiteHeader from "../../components/SiteHeader";
 import { getApiErrorMessage } from "../../utils/apiError";
 
 const QUICK_ACTIONS = [
@@ -102,6 +103,8 @@ export default function SupervisorDashboard({ navigation }) {
             <Text style={styles.name}>{user?.fullName || "Supervisor"}</Text>
           </View>
         </View>
+
+        <SiteHeader onSiteChange={fetchStats} />
 
         {loading ? (
           <ActivityIndicator size="large" color="#112250" style={styles.loader} />

@@ -1,243 +1,257 @@
-import React from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
-// Types "0900" as "09:00" so a supervisor filling in a whole crew never has to
-// reach for the colon key.
-const formatTimeInput = (raw, previous) => {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
+// Fixed so the list can use getItemLayout -- see LabourAttendanceScreen. Any
+// change here must be mirrored there or scrolling estimates go wrong.
+export const ROW_HEIGHT = 58;
 
-  // Deleting back through the colon must not immediately re-add it.
-  if (raw.length < previous.length && raw.endsWith(":")) return raw.slice(0, -1);
-
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+// "HH:MM" <-> Date, only ever used to drive the picker. The stored value stays
+// a plain "09:00" string, matching what the server validates and every report
+// already reads.
+const toDate = (hhmm) => {
+  const d = new Date();
+  const [h, m] = /^\d{2}:\d{2}$/.test(hhmm || "") ? hhmm.split(":").map(Number) : [9, 0];
+  d.setHours(h, m, 0, 0);
+  return d;
 };
 
-export default function AttendanceRow({ row, onChange }) {
-  const { labour, present, punchIn, punchOut, editable, workingHours } = row;
+const toHHMM = (date) =>
+  `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
-  const setField = (key) => (value) => onChange(labour._id, { [key]: value });
+/**
+ * One labourer on the day's roster.
+ *
+ * The flow is sequential on purpose: punch in, then punch out. Presence is not
+ * a thing the supervisor toggles -- it is what having both punches MEANS, and
+ * the server derives it the same way. There is no Absent button: anyone left
+ * on the roster who was never punched in is absent, which removes a whole
+ * class of "marked present by accident" mistakes.
+ */
+function AttendanceRow({ row, onChange, onRemove }) {
+  const { labour, punchIn, punchOut, editable, workingHours } = row;
 
-  const setPresent = (value) => {
-    // Clearing the times on absent mirrors what the server stores, so the row
-    // can't display hours for someone marked absent.
-    onChange(labour._id, value
-      ? { present: true }
-      : { present: false, punchIn: "", punchOut: "" });
+  // Which picker is open, if any: "in" | "out" | null.
+  const [picking, setPicking] = useState(null);
+
+  const complete = !!punchIn && !!punchOut;
+
+  const onPicked = (event, selected) => {
+    // Android fires with type "dismissed" when the user backs out; iOS keeps
+    // the spinner mounted, so it is closed explicitly either way.
+    setPicking(null);
+
+    if (event?.type === "dismissed" || !selected) return;
+
+    const value = toHHMM(selected);
+
+    if (picking === "in") {
+      onChange(labour._id, { marked: true, punchIn: value });
+    } else if (picking === "out") {
+      onChange(labour._id, { marked: true, punchOut: value });
+    }
   };
 
   return (
-    <View style={[styles.card, !editable && styles.cardLocked]}>
-      <View style={styles.topRow}>
-        <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={1}>{labour.fullName}</Text>
-          <Text style={styles.labourId}>{labour.labourId}</Text>
-        </View>
-
-        {editable ? (
-          <View style={styles.toggle}>
-            <TouchableOpacity
-              style={[styles.toggleBtn, present && styles.presentActive]}
-              onPress={() => setPresent(true)}
-            >
-              <Text style={[styles.toggleText, present && styles.presentActiveText]}>P</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.toggleBtn, !present && styles.absentActive]}
-              onPress={() => setPresent(false)}
-            >
-              <Text style={[styles.toggleText, !present && styles.absentActiveText]}>A</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.lockedBadge}>
-            <Ionicons name="lock-closed" size={12} color="#6B7280" />
-            <Text style={styles.lockedText}>{present ? "Present" : "Absent"}</Text>
-          </View>
-        )}
+    <View style={[styles.row, !editable && styles.rowLocked]}>
+      <View style={styles.identity}>
+        <Text style={styles.name} numberOfLines={1}>{labour.fullName}</Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {labour.labourId}
+          {complete && workingHours ? ` · ${workingHours}h` : ""}
+          {punchIn && !punchOut ? " · on site" : ""}
+          {!punchIn ? " · not in" : ""}
+        </Text>
       </View>
 
-      {present && (
-        <View style={styles.timeRow}>
-          <View style={styles.timeCol}>
-            <Text style={styles.timeLabel}>In</Text>
-            <TextInput
-              style={[styles.timeInput, !editable && styles.timeInputLocked]}
-              value={punchIn || ""}
-              onChangeText={(v) => setField("punchIn")(formatTimeInput(v, punchIn || ""))}
-              placeholder="09:00"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="number-pad"
-              maxLength={5}
-              editable={editable}
-            />
-          </View>
+      {editable ? (
+        <View style={styles.actions}>
+          {/* Removing is for someone rostered by mistake -- offered only before
+              they've been punched in. After that, correcting the time is
+              right, not deleting the record. */}
+          {!punchIn && onRemove && (
+            <TouchableOpacity
+              onPress={() => onRemove(labour._id)}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            >
+              <Ionicons name="close" size={16} color="#C4C9D2" />
+            </TouchableOpacity>
+          )}
 
-          <View style={styles.timeCol}>
-            <Text style={styles.timeLabel}>Out</Text>
-            <TextInput
-              style={[styles.timeInput, !editable && styles.timeInputLocked]}
-              value={punchOut || ""}
-              onChangeText={(v) => setField("punchOut")(formatTimeInput(v, punchOut || ""))}
-              placeholder="18:00"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="number-pad"
-              maxLength={5}
-              editable={editable}
-            />
-          </View>
-
-          <View style={styles.hoursCol}>
-            <Text style={styles.timeLabel}>Hours</Text>
-            <Text style={styles.hoursValue}>
-              {workingHours ? workingHours.toFixed(2) : "--"}
+          <TouchableOpacity
+            style={[styles.punch, punchIn && styles.punchInSet]}
+            onPress={() => setPicking("in")}
+          >
+            <Text style={[styles.punchText, punchIn && styles.punchInSetText]}>
+              {punchIn || "In"}
             </Text>
-          </View>
+          </TouchableOpacity>
+
+          {/* Punch out only becomes available once they are in, so the
+              sequence cannot be performed backwards -- the server rejects that
+              pair anyway, and a disabled button explains it sooner. */}
+          <TouchableOpacity
+            style={[
+              styles.punch,
+              !punchIn && styles.punchDisabled,
+              punchOut && styles.punchOutSet,
+            ]}
+            onPress={() => punchIn && setPicking("out")}
+            disabled={!punchIn}
+          >
+            <Text
+              style={[
+                styles.punchText,
+                !punchIn && styles.punchDisabledText,
+                punchOut && styles.punchOutSetText,
+              ]}
+            >
+              {punchOut || "Out"}
+            </Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <View style={styles.lockedBadge}>
+          <Ionicons name="lock-closed" size={11} color="#9CA3AF" />
+          <Text style={styles.lockedText}>
+            {complete ? `${punchIn}-${punchOut}` : punchIn ? `${punchIn}-` : "A"}
+          </Text>
+        </View>
+      )}
+
+      {picking && (
+        <DateTimePicker
+          value={toDate(picking === "in" ? punchIn : punchOut)}
+          mode="time"
+          is24Hour
+          display={Platform.OS === "ios" ? "spinner" : "clock"}
+          onChange={onPicked}
+        />
       )}
     </View>
   );
 }
 
+/**
+ * Memoised, because the sheet rebuilds its whole rows array on every change.
+ * Without this, setting one time re-rendered every mounted row -- the thing
+ * that made a large crew feel sluggish. Only the fields actually drawn are
+ * compared.
+ */
+export default React.memo(AttendanceRow, (prev, next) => {
+  const a = prev.row;
+  const b = next.row;
+
+  return (
+    a.labour._id === b.labour._id &&
+    a.punchIn === b.punchIn &&
+    a.punchOut === b.punchOut &&
+    a.workingHours === b.workingHours &&
+    a.editable === b.editable &&
+    prev.onChange === next.onChange &&
+    prev.onRemove === next.onRemove
+  );
+});
+
 const styles = StyleSheet.create({
-  card: {
+  row: {
+    height: ROW_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#EEF1F5",
   },
 
-  cardLocked: {
+  rowLocked: {
     backgroundColor: "#F8FAFC",
   },
 
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  info: {
+  identity: {
     flex: 1,
+    minWidth: 0,
   },
 
   name: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#1E1B4B",
   },
 
-  labourId: {
-    fontSize: 12,
+  meta: {
+    fontSize: 11,
     color: "#9CA3AF",
     marginTop: 1,
   },
 
-  toggle: {
+  actions: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 5,
   },
 
-  toggleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  // Wide enough to hold "09:00" once set, so the row doesn't reflow the moment
+  // a time is chosen.
+  punch: {
+    minWidth: 52,
+    height: 34,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#F8FAFC",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 6,
   },
 
-  toggleText: {
-    fontSize: 15,
+  punchText: {
+    fontSize: 12,
     fontWeight: "700",
     color: "#9CA3AF",
   },
 
-  presentActive: {
+  punchInSet: {
     backgroundColor: "#DCFCE7",
     borderColor: "#16A34A",
   },
 
-  presentActiveText: {
+  punchInSetText: {
     color: "#15803D",
   },
 
-  absentActive: {
-    backgroundColor: "#FEE2E2",
-    borderColor: "#DC2626",
+  punchOutSet: {
+    backgroundColor: "#E0E7FF",
+    borderColor: "#4F46E5",
   },
 
-  absentActiveText: {
-    color: "#B91C1C",
+  punchOutSetText: {
+    color: "#3730A3",
+  },
+
+  punchDisabled: {
+    opacity: 0.45,
+  },
+
+  punchDisabledText: {
+    color: "#C4C9D2",
   },
 
   lockedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    gap: 3,
+    paddingHorizontal: 8,
+    height: 34,
   },
 
   lockedText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#6B7280",
-  },
-
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    marginTop: 12,
-  },
-
-  timeCol: {
-    flex: 1,
-  },
-
-  hoursCol: {
-    width: 60,
-    alignItems: "center",
-  },
-
-  timeLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
-    marginBottom: 4,
-  },
-
-  timeInput: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#1E1B4B",
-    textAlign: "center",
-  },
-
-  timeInputLocked: {
     color: "#9CA3AF",
-  },
-
-  hoursValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#112250",
-    paddingVertical: 10,
   },
 });

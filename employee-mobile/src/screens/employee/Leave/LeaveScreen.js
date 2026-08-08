@@ -10,6 +10,7 @@ import {
 import styles from "./styles/LeaveStyles.js";
 import api from "../../../api/api.js";
 import LeaveHeader from "./components/LeaveHeader";
+import KeyboardAwareScrollView from "../../../components/KeyboardAwareScrollView";
 import LeaveForm from "./components/LeaveForm";
 import LeaveHistoryCard from "./components/LeaveHistoryCard";
 import HolidayList from "./components/HolidayList";
@@ -152,9 +153,13 @@ export default function LeaveScreen() {
     <View style={styles.container}>
       <LeaveHeader balances={balances} onApplyPress={() => setShowForm((prev) => !prev)} />
 
-      <ScrollView
+      {/* The apply form lives in this list. Unlike the Add Site and Add Meeting
+          sheets this is a plain screen, so the window does resize for the
+          keyboard -- but the Submit button sits directly under a multiline
+          Reason field, and resizing alone never scrolls it back into view.
+          Padding by the keyboard height is what makes it reachable. */}
+      <KeyboardAwareScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
       >
         {showForm ? (
           <LeaveForm
@@ -195,7 +200,7 @@ export default function LeaveScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

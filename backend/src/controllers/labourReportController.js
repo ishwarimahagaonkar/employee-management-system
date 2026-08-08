@@ -76,16 +76,18 @@ async function buildLabourReport({ user, query }) {
         date: { $gte: startDate, $lte: endDate },
     };
 
-    // Narrowing to one labourer still has to stay inside the sites above, so a
-    // supervisor can't read another site's labour by passing its id.
+    // Labour is company-wide now, so a labourer is valid as long as they belong
+    // to the company. Access is still enforced by the site filter above: asking
+    // about someone who never worked one of your sites yields an empty report
+    // rather than another site's data.
     let labourDoc = null;
     if (labourId) {
         labourDoc = await Labour.findOne({
             _id: String(labourId),
             companyId: user.companyId ?? null,
-        }).select("labourId fullName siteId").catch(() => null);
+        }).select("labourId fullName").catch(() => null);
 
-        if (!labourDoc || !sites.some((s) => String(s._id) === String(labourDoc.siteId))) {
+        if (!labourDoc) {
             throw fail("Labour not found", 404);
         }
 
@@ -112,13 +114,18 @@ async function buildLabourReport({ user, query }) {
         site: r.siteId?.name ?? "",
         siteCode: r.siteId?.code ?? "",
         supervisor: r.supervisorId?.fullName ?? "Unassigned",
-        status: r.present ? "Present" : "Absent",
+        // Three states, not two. Someone rostered to a site but never marked
+        // has NOT been recorded absent, and reporting them as such would
+        // understate attendance and could cost them a day's pay.
+        status: !r.marked ? "Not marked" : r.present ? "Present" : "Absent",
         punchIn: r.punchIn || "-",
         punchOut: r.punchOut || "-",
         workingHours: r.workingHours || 0,
     }));
 
     const presentCount = rows.filter((row) => row.status === "Present").length;
+    const absentCount = rows.filter((row) => row.status === "Absent").length;
+    const unmarkedCount = rows.filter((row) => row.status === "Not marked").length;
     const totalHours = rows.reduce((sum, row) => sum + row.workingHours, 0);
 
     // Named filters make the exported file self-describing -- a PDF on someone
@@ -147,7 +154,8 @@ async function buildLabourReport({ user, query }) {
         totals: {
             records: rows.length,
             present: presentCount,
-            absent: rows.length - presentCount,
+            absent: absentCount,
+            unmarked: unmarkedCount,
             workingHours: Number(totalHours.toFixed(2)),
         },
         rows,
@@ -191,6 +199,7 @@ function buildCsvString(report) {
     out += csvRow(["Total Records", report.totals.records]);
     out += csvRow(["Present", report.totals.present]);
     out += csvRow(["Absent", report.totals.absent]);
+    out += csvRow(["Not marked", report.totals.unmarked]);
     out += csvRow(["Total Working Hours", report.totals.workingHours]);
 
     return out;
@@ -240,6 +249,7 @@ async function buildExcelBuffer(report) {
         { metric: "Total Records", value: report.totals.records },
         { metric: "Present", value: report.totals.present },
         { metric: "Absent", value: report.totals.absent },
+        { metric: "Not marked", value: report.totals.unmarked },
         { metric: "Total Working Hours", value: report.totals.workingHours },
     ]);
     totalsSheet.getRow(1).font = { bold: true };
@@ -269,6 +279,7 @@ function writePdfReport(doc, report) {
     doc.text(`Total Records: ${report.totals.records}`);
     doc.text(`Present: ${report.totals.present}`);
     doc.text(`Absent: ${report.totals.absent}`);
+    doc.text(`Not marked: ${report.totals.unmarked}`);
     doc.text(`Total Working Hours: ${report.totals.workingHours}`);
     doc.moveDown();
 

@@ -56,11 +56,19 @@ const resolveSite = async (siteId, user, { forWrite }) => {
 /**
  * Present/absent counts for a site on a date, read from the attendance sheet.
  * This is the single source of those numbers -- they are never typed in.
+ *
+ * Counted on punchIn, NOT on the `present` flag. `present` means the full
+ * shift was recorded (punched in and out), which is only true once people have
+ * gone home; a report filed at 2pm with the whole crew still working would
+ * otherwise read zero present. Turning up is what the report is about, so
+ * anyone with an in-time counts, and absent stays "rostered but never punched
+ * in" -- which is exactly how absence is recorded now that there is no
+ * separate absent button.
  */
 const labourCountsFor = async (siteId, date) => {
-    const records = await LabourAttendance.find({ siteId, date }).select("present");
+    const records = await LabourAttendance.find({ siteId, date }).select("punchIn");
 
-    const present = records.filter((r) => r.present).length;
+    const present = records.filter((r) => !!r.punchIn).length;
 
     return {
         labourPresent: present,
@@ -74,11 +82,14 @@ const labourCountsFor = async (siteId, date) => {
  * Whether this user may still change an existing report.
  *
  * "Supervisor can edit only on the same day" -- measured from when the report
- * was filed, so a report filed today stays editable through the day. Admins
- * are exempt, otherwise a mistake found tomorrow could never be corrected.
+ * was filed, so a report filed today stays editable through the day. The
+ * MANAGER is exempt, otherwise a mistake found tomorrow could never be
+ * corrected. Admin used to hold that exemption and no longer does: it is
+ * read-only on daily reports now, overseeing through them rather than
+ * authoring them.
  */
 const canEditReport = (report, user) => {
-    if (user.role === ROLES.ADMIN) return true;
+    if (user.role === ROLES.MANAGER) return true;
 
     const filedOn = new Date(report.createdAt).toLocaleDateString("en-CA", {
         timeZone: "Asia/Kolkata",

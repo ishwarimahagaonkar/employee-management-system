@@ -20,14 +20,36 @@ const {
 const sameCompany = (a, b) => String(a ?? null) === String(b ?? null);
 
 
-// Which roles an actor may view and edit inside their own company.
-// Super admin is absent from COMPANY_ROLES, so it is never manageable here --
-// that account is only reachable through the super-admin routes.
+// Which roles an actor may ACT ON (edit, delete, change role) inside their own
+// company. Super admin is absent from COMPANY_ROLES, so it is never manageable
+// here -- that account is only reachable through the super-admin routes.
+//
+// Admin is deliberately included for an admin: they must be able to edit and
+// delete other admin accounts. This is an authorisation question and is
+// separate from what the employee LIST shows -- see listableRolesFor.
 const manageableRolesFor = (actorRole) => {
     if (actorRole === ROLES.ADMIN) return COMPANY_ROLES;
     if (actorRole === ROLES.MANAGER) return [ROLES.SUPERVISOR, ROLES.EMPLOYEE];
     return [];
 };
+
+
+/**
+ * Which roles the employee LIST shows by default.
+ *
+ * The list used to be hard-filtered to role "employee", which made every admin
+ * account invisible and therefore impossible to edit. Widening it to every
+ * manageable role fixed that but overshot: admins then appeared as entries in
+ * their own staff list, and were counted as employees on the dashboard.
+ *
+ * Listing and authorisation are different questions. An admin administers the
+ * company rather than being staff of it, so it is excluded here -- while
+ * remaining fully manageable through manageableRolesFor, and still reachable
+ * in this endpoint via an explicit ?role=admin. Nothing an admin could do
+ * before is lost.
+ */
+const listableRolesFor = (actorRole) =>
+    manageableRolesFor(actorRole).filter((role) => role !== ROLES.ADMIN);
 
 
 /**
@@ -232,17 +254,20 @@ exports.createEmployee = async (req, res) => {
 // ==========================
 exports.getAllEmployees = async (req, res) => {
     try {
-        // Previously hard-filtered to role "employee", which made every admin
-        // account invisible here and therefore impossible to edit or delete.
-        // The list now covers whichever roles the caller is allowed to manage.
+        // Two different questions, deliberately kept apart: `listable` is what
+        // the staff list shows by default (no admins), `manageable` is what the
+        // caller is allowed to reach at all. An explicit ?role=admin is still
+        // honoured for an admin, so admin accounts remain findable and
+        // editable -- they just are not staff.
+        const listable = listableRolesFor(req.user.role);
         const manageable = manageableRolesFor(req.user.role);
 
         const filter = {
-            role: { $in: manageable },
+            role: { $in: listable },
             companyId: req.user.companyId,
         };
 
-        // Optional ?role= filter, constrained to what the caller may see.
+        // Optional ?role= filter, constrained to what the caller may reach.
         if (req.query.role && manageable.includes(req.query.role)) {
             filter.role = req.query.role;
         }
