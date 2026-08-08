@@ -3,22 +3,44 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
 
+/**
+ * The app's one date field. Tap to open a calendar; never typed.
+ *
+ * Consolidated from two near-identical copies under admin/Holidays and
+ * employee/Leave that differed only in whether they accepted minDate --
+ * EmployeeFormModal was already reaching across module boundaries into the
+ * Holidays one to avoid a third.
+ *
+ * TIMEZONE: the value is the calendar's own `day.dateString`, a plain
+ * "YYYY-MM-DD" for the day that was tapped. It is never round-tripped through
+ * a Date, so it cannot shift by a day -- which is exactly what happens when a
+ * local midnight is converted to UTC. Every date in this system is stored as
+ * this same string, so what is picked is what is saved.
+ */
 const formatDisplay = (iso) => {
   if (!iso) return "";
   const [year, month, day] = iso.split("-");
   return `${day}-${month}-${year}`;
 };
 
-export default function DateField({ label, value, onChange, minDate }) {
+export default function DateField({
+  label,
+  value,
+  onChange,
+  minDate,
+  maxDate,
+  placeholder = "dd-mm-yyyy",
+  style,
+}) {
   const [visible, setVisible] = useState(false);
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, style]}>
       <Text style={styles.label}>{label}</Text>
 
       <TouchableOpacity style={styles.input} onPress={() => setVisible(true)}>
         <Text style={value ? styles.valueText : styles.placeholderText}>
-          {value ? formatDisplay(value) : "dd-mm-yyyy"}
+          {value ? formatDisplay(value) : placeholder}
         </Text>
         <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
       </TouchableOpacity>
@@ -29,6 +51,7 @@ export default function DateField({ label, value, onChange, minDate }) {
             <Calendar
               current={value || undefined}
               minDate={minDate}
+              maxDate={maxDate}
               onDayPress={(day) => {
                 onChange(day.dateString);
                 setVisible(false);

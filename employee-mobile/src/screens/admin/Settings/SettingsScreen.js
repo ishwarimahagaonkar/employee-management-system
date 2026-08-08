@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../../api/api.js";
 import SettingsCard from "./components/SettingsCard";
 import SettingsField from "./components/SettingsField";
+import TimeField from "../../../components/TimeField";
 import ErrorState from "../../../components/ErrorState";
 import { getApiErrorMessage } from "../../../utils/apiError";
 
@@ -263,23 +264,45 @@ export default function SettingsScreen({ navigation }) {
           title="Attendance Rules"
           subtitle="Configure attendance policies"
         >
+          {/* Clock pickers while editing. These two drive lateness and
+              working-hours for the whole company, so a typo here is costly and
+              silent -- a "9:00" without the leading zero fails the server's
+              HH:MM check on every punch. Read-only outside edit mode, matching
+              how SettingsField behaves for every other value on this screen. */}
           <View style={styles.row}>
-            <SettingsField
-              half
-              editable={isEditing}
-              label="Work Start Time"
-              value={form.workStartTime}
-              onChangeText={update("workStartTime")}
-              placeholder="09:00"
-            />
-            <SettingsField
-              half
-              editable={isEditing}
-              label="Work End Time"
-              value={form.workEndTime}
-              onChangeText={update("workEndTime")}
-              placeholder="18:00"
-            />
+            {isEditing ? (
+              <>
+                <TimeField
+                  label="Work Start Time"
+                  value={form.workStartTime}
+                  onChange={update("workStartTime")}
+                  defaultHour={9}
+                />
+                <TimeField
+                  label="Work End Time"
+                  value={form.workEndTime}
+                  onChange={update("workEndTime")}
+                  defaultHour={18}
+                />
+              </>
+            ) : (
+              <>
+                <SettingsField
+                  half
+                  editable={false}
+                  label="Work Start Time"
+                  value={form.workStartTime}
+                  placeholder="09:00"
+                />
+                <SettingsField
+                  half
+                  editable={false}
+                  label="Work End Time"
+                  value={form.workEndTime}
+                  placeholder="18:00"
+                />
+              </>
+            )}
           </View>
           <SettingsField
             editable={isEditing}

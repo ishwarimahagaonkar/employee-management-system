@@ -19,6 +19,7 @@ import { arrayBufferToBase64, arrayBufferToText } from "../../utils/base64.js";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { AuthContext } from "../../context/AuthContext";
 
+import DateField from "../../components/DateField";
 import SimplePickerModal from "./components/SimplePickerModal";
 
 const dateStr = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -252,28 +253,29 @@ export default function LabourReportScreen({ navigation }) {
             ))}
           </View>
 
+          {/* Calendars rather than typed dates. The value stays the same
+              "YYYY-MM-DD" string the API already expects -- DateField returns
+              the calendar's own dateString and never converts through a Date,
+              so the picked day cannot shift by one.
+              maxDate on From is the chosen To (and vice versa via minDate), so
+              an inverted range cannot be produced in the first place. */}
           {period === "custom" && (
             <View style={styles.dateRow}>
-              <View style={styles.dateCol}>
-                <Text style={styles.label}>From</Text>
-                <TextInput
-                  style={styles.input}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="2026-08-01"
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-              <View style={styles.dateCol}>
-                <Text style={styles.label}>To</Text>
-                <TextInput
-                  style={styles.input}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="2026-08-31"
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
+              <DateField
+                label="From"
+                value={startDate}
+                onChange={setStartDate}
+                maxDate={endDate || todayStr()}
+                style={styles.dateCol}
+              />
+              <DateField
+                label="To"
+                value={endDate}
+                onChange={setEndDate}
+                minDate={startDate || undefined}
+                maxDate={todayStr()}
+                style={styles.dateCol}
+              />
             </View>
           )}
 

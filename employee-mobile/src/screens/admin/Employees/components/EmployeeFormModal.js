@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import DateField from "../../Holidays/components/DateField";
+import DateField from "../../../../components/DateField";
 
 const emptyForm = {
   empID: "",

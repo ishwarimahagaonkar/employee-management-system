@@ -12,7 +12,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import DateField from "./DateField";
+import DateField from "../../../../components/DateField";
 
 const emptyForm = { date: "", name: "" };
 

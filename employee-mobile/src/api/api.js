@@ -14,7 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // The __DEV__ guard means a release build can never ship pointing at a laptop,
 // however this flag is left. Android also blocks cleartext http:// in release
 // builds, so the local URL only works in development anyway.
-const USE_LOCAL_API = true;
+const USE_LOCAL_API = false; // set to true to use the local backend instead of production
 const LOCAL_API = "http://10.198.167.144:5000/api";
 const PROD_API = "https://api.spereon.codes/api";
 

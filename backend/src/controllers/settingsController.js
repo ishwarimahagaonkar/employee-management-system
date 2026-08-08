@@ -1,31 +1,11 @@
 const Settings = require("../models/Settings");
+const { getOrCreateCompanySettings } = require("../utils/companySettings");
 
 // Each company has its own settings document (companyId: null covers
 // pre-multi-tenant deployments that never had a company assigned).
-// Upserted in one statement: findOne-then-create is not atomic, and two
-// requests arriving together could each miss the findOne and each create a
-// settings document. Every later read would then return an arbitrary one of
-// them, so an admin's saved change would seem to apply intermittently.
-//
-// A simultaneous upsert can still lose to the unique index on companyId. That
-// only happens because the other request just created the row, so the right
-// response is to read it, not to fail.
-const getOrCreateSettings = async (companyId) => {
-    const scopedCompanyId = companyId ?? null;
-
-    try {
-        return await Settings.findOneAndUpdate(
-            { companyId: scopedCompanyId },
-            { $setOnInsert: { companyId: scopedCompanyId } },
-            { returnDocument: "after", upsert: true }
-        );
-    } catch (err) {
-        if (err.code === 11000) {
-            return await Settings.findOne({ companyId: scopedCompanyId });
-        }
-        throw err;
-    }
-};
+// Shared with attendanceController: one settings row, created one way, seeded
+// with the company's real name. See utils/companySettings.js.
+const getOrCreateSettings = (companyId) => getOrCreateCompanySettings(companyId);
 
 /**
  * @desc Get organization settings

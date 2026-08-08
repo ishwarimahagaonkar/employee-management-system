@@ -5,6 +5,10 @@ const Settings = require("../models/Settings");
 const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const Travel = require("../models/Travel");
+const Site = require("../models/Site");
+const Labour = require("../models/Labour");
+const LabourAttendance = require("../models/LabourAttendance");
+const DailyWorkReport = require("../models/DailyWorkReport");
 const bcrypt = require("bcryptjs");
 const { defaultHolidaysForYear } = require("../utils/defaultHolidays");
 const { validatePassword, isValidEmail } = require("../utils/validators");
@@ -107,9 +111,20 @@ exports.createCompany = async (req, res) => {
         await Holiday.insertMany(
             defaultHolidaysForYear(year).map((h) => ({ ...h, companyId: company._id }))
         );
+        // Seeded with the company's own name and email. Without this the row
+        // is created later, lazily, by whichever request needs it first -- and
+        // it then falls back to schema defaults, which is how every tenant
+        // ended up displaying the same hardcoded company name.
         await Settings.findOneAndUpdate(
             { companyId: company._id },
-            { $set: { holidaySeedYear: year }, $setOnInsert: { companyId: company._id } },
+            {
+                $set: { holidaySeedYear: year },
+                $setOnInsert: {
+                    companyId: company._id,
+                    companyName: company.name,
+                    companyEmail: company.email,
+                },
+            },
             { upsert: true }
         );
 
@@ -275,16 +290,39 @@ exports.deleteCompany = async (req, res) => {
 
         // Cascade: remove everything scoped to this company so nothing is left
         // orphaned when the company itself is gone.
-        await Promise.all([
+        //
+        // This list must cover EVERY model carrying a companyId. Site, Labour,
+        // LabourAttendance and DailyWorkReport were added with the labour
+        // feature and never added here, so deleting a company silently left
+        // their rows behind -- pointing at a company that no longer existed,
+        // invisible to every screen, and counted by nothing.
+        //
+        // If a new model gains a companyId, it belongs here too. The check in
+        // scripts/auditCompanyCascade.js exists to catch that being forgotten.
+        const removed = await Promise.all([
             User.deleteMany({ companyId }),
             Attendance.deleteMany({ companyId }),
             Leave.deleteMany({ companyId }),
             Travel.deleteMany({ companyId }),
             Holiday.deleteMany({ companyId }),
             Settings.deleteMany({ companyId }),
+            Site.deleteMany({ companyId }),
+            Labour.deleteMany({ companyId }),
+            LabourAttendance.deleteMany({ companyId }),
+            DailyWorkReport.deleteMany({ companyId }),
         ]);
 
         await Company.findByIdAndDelete(companyId);
+
+        // Logged because this is irreversible and the counts are the only
+        // record of what a delete actually took with it.
+        console.log(
+            `[company ${companyId}] deleted:`,
+            ["users", "attendance", "leave", "travel", "holidays", "settings",
+             "sites", "labour", "labourAttendance", "dailyReports"]
+                .map((name, i) => `${name}=${removed[i].deletedCount}`)
+                .join(" ")
+        );
 
         return res.status(200).json({
             message: "Company and all its data deleted successfully",

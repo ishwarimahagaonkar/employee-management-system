@@ -7,17 +7,26 @@ const settingsSchema = new mongoose.Schema(
             ref: "Company",
             default: null,
         },
+        // Seeded from the Company record when settings are first created --
+        // see seedFromCompany() in utils/companySettings.js.
+        //
+        // These used to default to a real company's name and address
+        // ("Obsidian.dev" / "admin@obsidian.dev"). Because settings are created
+        // lazily on first use and nothing filled these in, EVERY company on the
+        // platform displayed that name until an admin happened to edit it. A
+        // default must never be another tenant's data; empty is the only safe
+        // starting value.
         companyName: {
             type: String,
-            default: "Obsidian.dev",
+            default: "",
         },
         industry: {
             type: String,
-            default: "Technology",
+            default: "",
         },
         companyEmail: {
             type: String,
-            default: "admin@obsidian.dev",
+            default: "",
         },
         companyPhone: {
             type: String,

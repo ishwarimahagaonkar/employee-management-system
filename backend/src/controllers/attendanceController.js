@@ -10,36 +10,11 @@ const { getPagination } = require("../utils/pagination");
 const { monthDateRange } = require("../utils/monthRange");
 const { savePunchPhoto, readPunchPhoto } = require("../utils/photoStorage");
 const { resolveCapturedAt } = require("../utils/capturedAt");
+const { getOrCreateCompanySettings } = require("../utils/companySettings");
 
-// Upserted in one statement rather than findOne-then-create.
-//
-// This runs on every punch, so it had the widest concurrency exposure in the
-// system: two employees punching in at a company with no settings row yet
-// could both miss the findOne and both create one. From then on every read
-// returned an arbitrary one of the two, and an admin's geofence change
-// appeared to apply only half the time.
-//
-// The unique index on companyId can still reject a genuinely simultaneous
-// upsert; that means the other request just created the row, so re-reading is
-// the correct answer rather than an error.
-const getOrgSettings = async (companyId) => {
-  const scoped = companyId ?? null;
-
-  try {
-    // returnDocument rather than `new: true` -- Mongoose 9 deprecates the
-    // latter and warns on every call, which on this path means once per punch.
-    return await Settings.findOneAndUpdate(
-      { companyId: scoped },
-      { $setOnInsert: { companyId: scoped } },
-      { returnDocument: "after", upsert: true }
-    );
-  } catch (err) {
-    if (err.code === 11000) {
-      return await Settings.findOne({ companyId: scoped });
-    }
-    throw err;
-  }
-};
+// Shared with settingsController so a settings row is created exactly one way,
+// carrying the company's real name rather than a schema default.
+const getOrgSettings = (companyId) => getOrCreateCompanySettings(companyId);
 
 // Parses "HH:MM" into total minutes since midnight
 const parseTimeToMinutes = (hhmm) => {

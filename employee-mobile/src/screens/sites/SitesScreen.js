@@ -43,6 +43,7 @@ export default function SitesScreen({ navigation }) {
   const [formVisible, setFormVisible] = useState(false);
   const [editingSite, setEditingSite] = useState(null);
   const [reassigningSite, setReassigningSite] = useState(null);
+  const [supervisors, setSupervisors] = useState([]);
 
   const fetchSites = async () => {
     try {
@@ -56,6 +57,23 @@ export default function SitesScreen({ navigation }) {
     }
   };
 
+  // The company's supervisors, for assigning one while creating a site.
+  //
+  // Only admin and manager need this -- a supervisor is assigned their own site
+  // by the server -- so the request is skipped for everyone else rather than
+  // firing and being ignored. A failure is swallowed: not being able to list
+  // supervisors must not stop a site being created without one.
+  const fetchSupervisors = async () => {
+    if (!canReassign) return;
+
+    try {
+      const res = await api.get("/employees", { params: { role: "supervisor" } });
+      setSupervisors(res.data.employees || []);
+    } catch (err) {
+      setSupervisors([]);
+    }
+  };
+
   const retry = () => {
     setLoading(true);
     fetchSites();
@@ -63,6 +81,7 @@ export default function SitesScreen({ navigation }) {
 
   useEffect(() => {
     fetchSites();
+    fetchSupervisors();
   }, []);
 
   const openAdd = () => {
@@ -86,6 +105,10 @@ export default function SitesScreen({ navigation }) {
           code: form.code,
           location: form.location,
           description: form.description,
+          // Only meaningful for an admin or manager. A supervisor creating a
+          // site is assigned it by the server regardless of what is sent, so
+          // the form does not offer the choice to them.
+          supervisorId: form.supervisorId || null,
         });
       }
 
@@ -118,9 +141,12 @@ export default function SitesScreen({ navigation }) {
       .includes(search.toLowerCase())
   );
 
-  const emptyMessage = isSupervisor
+  // Everyone who reaches this screen can now create a site, so the old
+  // "a supervisor creates these" text was telling admins and managers to wait
+  // for someone else while showing them the + button.
+  const emptyMessage = canCreate
     ? "No sites yet. Tap + to create your first one."
-    : "No sites yet. A supervisor creates these.";
+    : "No sites yet.";
 
   return (
     <SafeAreaView style={styles.container}>
@@ -178,6 +204,8 @@ export default function SitesScreen({ navigation }) {
       <SiteFormModal
         visible={formVisible}
         site={editingSite}
+        supervisors={supervisors}
+        canAssignSupervisor={canReassign}
         onClose={() => setFormVisible(false)}
         onSubmit={handleSubmit}
       />
